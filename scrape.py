@@ -371,7 +371,7 @@ def scrape_all() -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
 
-    combined = pd.concat(frames, ignore_index=True)
+    combined = pd.concat([f.dropna(axis=1, how="all") for f in frames], ignore_index=True)
     before = len(combined)
 
     # Within-run dedup by normalized key (catches cross-board duplicates)
