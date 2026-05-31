@@ -315,13 +315,16 @@ def push_job(row: pd.Series) -> bool:
     }
     if url:
         payload["properties"]["Apply Link"] = {"url": url}
+
+    # Pack salary + exp requirement into Notes (both fields don't exist as separate columns)
+    notes_parts = []
     if salary:
-        payload["properties"]["Salary Range"] = {
-            "rich_text": [{"text": {"content": salary}}]
-        }
+        notes_parts.append(f"Salary: {salary}")
     if exp_req:
-        payload["properties"]["Exp. Req"] = {
-            "rich_text": [{"text": {"content": exp_req}}]
+        notes_parts.append(f"Exp: {exp_req}")
+    if notes_parts:
+        payload["properties"]["Notes"] = {
+            "rich_text": [{"text": {"content": " | ".join(notes_parts)[:2000]}}]
         }
 
     resp = requests.post(
