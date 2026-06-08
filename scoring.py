@@ -73,10 +73,12 @@ def validate_models(
     test = types.Part.from_text(text="Reply with the single word OK.")
     cfg  = types.GenerateContentConfig(max_output_tokens=5)
 
-    for model, label in [
-        (SCORING_MODEL,           "Gemini (scoring)"),
-        (FETCH_DESCRIPTION_MODEL, "Gemma  (descriptions)"),
-    ]:
+    for i, (model, label, fatal) in enumerate([
+        (SCORING_MODEL,           "Gemini (scoring)",      True),
+        (FETCH_DESCRIPTION_MODEL, "Gemma  (descriptions)", False),  # non-fatal: jobs still scored with low_confidence
+    ]):
+        if i > 0:
+            time.sleep(3)   # avoid hitting per-second rate limit between consecutive validation calls
         clients = [c for c in [client, backup_client] if c]
         ok = False
         for c in clients:
@@ -88,12 +90,15 @@ def validate_models(
                     ok = True
                     break
             except Exception as exc:
-                print(f"  ✗ {label}: {str(exc)[:80]}")
+                print(f"  ✗ {label}: {str(exc)[:120]}")
         if not ok:
-            raise RuntimeError(
-                f"Model validation failed for {label} ({model}). "
-                "Check GEMINI_API_KEY / GEMINI_API_KEY_2 and the model ID in config.py."
-            )
+            if fatal:
+                raise RuntimeError(
+                    f"Model validation failed for {label} ({model}). "
+                    "Check GEMINI_API_KEY / GEMINI_API_KEY_2 and the model ID in config.py."
+                )
+            else:
+                print(f"  ⚠ {label} unavailable — jobs will be scored on title/company only (low_confidence=True).")
 
 
 # ── Resume loading ─────────────────────────────────────────────────────────────
