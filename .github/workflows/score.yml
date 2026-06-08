@@ -32,4 +32,5 @@ jobs:
           RESUME_FOLDER_ID:       ${{ secrets.RESUME_FOLDER_ID }}
           SERPAPI_KEY_1:          ${{ secrets.SERPAPI_KEY_1 }}
           SERPAPI_KEY_2:          ${{ secrets.SERPAPI_KEY_2 }}
+          SLACK_WEBHOOK_URL:      ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python run_serpapi.py

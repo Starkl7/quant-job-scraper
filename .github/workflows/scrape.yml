@@ -30,4 +30,5 @@ jobs:
           GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
           FETCH_DESCRIPTION_KEY:  ${{ secrets.FETCH_DESCRIPTION_KEY }}
           RESUME_FOLDER_ID:       ${{ secrets.RESUME_FOLDER_ID }}
+          SLACK_WEBHOOK_URL:      ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python run_jobspy.py
