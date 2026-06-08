@@ -1,14 +1,14 @@
-name: Scrape LinkedIn + Indeed (JobSpy)
+name: Scrape Google Jobs (SerpAPI)
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # 00:00, 06:00, 12:00, 18:00 UTC every day
+    - cron: '0 23 * * *'    # 23:00 UTC daily — captures the full day's listings
   workflow_dispatch:          # manual trigger from GitHub UI
 
 jobs:
-  scrape-jobspy:
+  scrape-serpapi:
     runs-on: ubuntu-latest
-    timeout-minutes: 90       # 54 queries × ~30s each ≈ 27 min; buffer for scoring + retry pass
+    timeout-minutes: 60       # 4 terms × 4 cities × scoring ≈ 20–40 min; buffer to 60
 
     steps:
       - name: Checkout repo
@@ -23,11 +23,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run JobSpy scraper + score + push to Notion
+      - name: Run SerpAPI scraper + score + push to Notion
         env:
           NOTION_TOKEN:           ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID:           ${{ secrets.NOTION_DB_ID }}
           GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
           FETCH_DESCRIPTION_KEY:  ${{ secrets.FETCH_DESCRIPTION_KEY }}
           RESUME_FOLDER_ID:       ${{ secrets.RESUME_FOLDER_ID }}
-        run: python run_jobspy.py
+          SERPAPI_KEY_1:          ${{ secrets.SERPAPI_KEY_1 }}
+          SERPAPI_KEY_2:          ${{ secrets.SERPAPI_KEY_2 }}
+        run: python run_serpapi.py

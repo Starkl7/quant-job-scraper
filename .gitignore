@@ -18,3 +18,10 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Legacy / experiment scripts (not part of the modular pipeline)
+scrape_serpapi_gj*.py
+scrape_firecrawl_gj_test.py
+test_new_sources.py
+test_run.py
+score.py
