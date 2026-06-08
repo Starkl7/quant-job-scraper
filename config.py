@@ -36,7 +36,7 @@ SERPAPI_DRY_RUN = os.environ.get("SERPAPI_DRY_RUN", "false").lower() == "true"
 # Gemini 3.1 Flash Lite — free tier: 15 RPM, 250k tokens/min, 500 RPD.
 # Verify the exact model ID in AI Studio (aistudio.google.com) and update here.
 SCORING_MODEL             = "models/gemini-3.1-flash-lite"  # 15 RPM, 250k TPM, 500 RPD — PDF + batch scoring
-FETCH_DESCRIPTION_MODEL   = "models/gemma-4-31b-it"         # 15 RPM, unlimited TPM, 1.5k RPD — separate quota
+FETCH_DESCRIPTION_MODEL   = "gemma-4-31b-it"                # 15 RPM, unlimited TPM, 1.5k RPD — separate quota
 SCORING_BATCH_SIZE        = 10
 
 # ── Notion ────────────────────────────────────────────────────────────────────
