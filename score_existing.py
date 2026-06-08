@@ -247,11 +247,15 @@ def main() -> None:
             print(f"     (5s pause — {rate:.0f} jobs/min, ETA ≈ {eta_min:.0f} min)\n")
             time.sleep(5)
 
-    # ── Retry pass: one more Gemma attempt for jobs that had no description ────
-    re_scored = 0
-    if low_conf_queue and FETCH_MISSING_DESCRIPTIONS:
-        print(f"\n  ↺ Retry pass: {len(low_conf_queue)} job(s) — one more Gemma attempt…")
-        for job, page_id in low_conf_queue:
+    # ── Retry passes: up to 2 more Gemma attempts for jobs with no description ─
+    re_scored        = 0
+    still_needs_desc = list(low_conf_queue) if FETCH_MISSING_DESCRIPTIONS else []
+    for retry_num in range(1, 3):
+        if not still_needs_desc:
+            break
+        print(f"\n  ↺ Retry {retry_num}/2: {len(still_needs_desc)} job(s) still missing descriptions…")
+        next_round = []
+        for job, page_id in still_needs_desc:
             time.sleep(5)
             fetched = fetch_description(
                 client, job.get("title",""), job.get("company",""),
@@ -259,6 +263,7 @@ def main() -> None:
             )
             if not fetched:
                 print(f"    → still no description: {job.get('title','')[:40]}")
+                next_round.append((job, page_id))
                 continue
             job["description"]    = fetched
             job["_fetched_chars"] = len(fetched)
@@ -268,6 +273,7 @@ def main() -> None:
                 if patch_score(page_id, new_score, description=fetched):
                     re_scored += 1
                     print(f"    ✓ re-scored {new_score.fit_score}/10 — {job.get('title','')[:40]}")
+        still_needs_desc = next_round
 
     elapsed_total = (time.time() - t_start) / 60
     print(f"\n{'='*64}")

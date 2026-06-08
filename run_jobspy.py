@@ -122,11 +122,15 @@ def main() -> None:
         # Gemini free tier: 15 RPM → 5s between batches
         time.sleep(5)
 
-    # ── Phase 3: Low-confidence retry (one attempt per job) ───────────────────
-    re_scored = 0
-    if low_conf_queue:
-        print(f"\n  ↺ Retry pass: {len(low_conf_queue)} low-confidence job(s) — trying Gemma once more…")
-        for job, page_id in low_conf_queue:
+    # ── Phase 3: Low-confidence retries (up to 2 attempts per job) ───────────
+    re_scored        = 0
+    still_needs_desc = list(low_conf_queue)
+    for retry_num in range(1, 3):
+        if not still_needs_desc:
+            break
+        print(f"\n  ↺ Retry {retry_num}/2: {len(still_needs_desc)} job(s) still missing descriptions…")
+        next_round = []
+        for job, page_id in still_needs_desc:
             time.sleep(5)
             fetched = fetch_description(
                 client, job.get("title", ""), job.get("company", ""),
@@ -134,6 +138,7 @@ def main() -> None:
             )
             if not fetched:
                 print(f"    → still no description: {job.get('title', '')[:40]}")
+                next_round.append((job, page_id))
                 continue
             job["description"]    = fetched
             job["_fetched_chars"] = len(fetched)
@@ -143,6 +148,7 @@ def main() -> None:
                 if notion.update_job_score(page_id, new_score, description=fetched):
                     re_scored += 1
                     print(f"    ✓ re-scored {new_score.fit_score}/10 — {job.get('title', '')[:40]}")
+        still_needs_desc = next_round
 
     # ── Log failed pushes ──────────────────────────────────────────────────────
     if failed_push:
