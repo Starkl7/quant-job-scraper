@@ -155,31 +155,32 @@ def fetch_description(
     backup_client: genai.Client | None = None,
 ) -> str:
     """
-    Generate a job description using Gemma 4 31B's parametric knowledge.
-    On 429 / RESOURCE_EXHAUSTED, retries once with the backup client.
-    Returns generated text, or empty string on failure / unknown company.
+    Generate a job description using Gemma 4 31B with Google Search grounding.
+    Grounding gives the model access to real-time web data, avoiding training-cutoff
+    hallucinations and providing citations for company/role details.
+    On any primary client failure, retries with the backup client.
+    Returns generated text, or empty string on failure.
     """
     prompt = (
-        f'Write a detailed job description for a "{title}" position at "{company}" '
+        f'Search for and write a detailed job description for a "{title}" position at "{company}" '
         f'in "{location}".\n\n'
-        f'Cover all of the following — write in full sentences and bullet points, '
-        f'aiming for 400-600 words total:\n\n'
+        f'Use Google Search to find current or recent postings for this role at {company}, '
+        f'then produce a structured description covering:\n\n'
         f'1. Role Overview: what this person does day-to-day at {company} (2-3 sentences)\n'
         f'2. Key Responsibilities: 5-6 specific bullet points describing actual work\n'
         f'3. Required Qualifications: degree level, years of experience, hard requirements\n'
-        f'4. Technical Skills: specific programming languages, tools, libraries, data sources '
+        f'4. Technical Skills: specific programming languages, tools, libraries, and data sources '
         f'   that {company} actually uses for this role\n'
         f'5. Preferred / Nice-to-have: additional skills or experience that strengthen candidacy\n\n'
-        f'Be specific to how {company} actually operates. '
+        f'Be specific to {company} — use real details from their actual postings or public information. '
         f'No company overview, no benefits section, no EEO boilerplate. '
-        f'If you have no knowledge of this company or role type, say: UNKNOWN.'
+        f'Aim for 400-600 words total.'
     )
     sys = (
-        "You are a quant finance recruiting expert with deep knowledge of "
-        "quantitative finance firms and the roles they hire for. Generate "
-        "accurate, detailed job descriptions based on what you know about "
-        "each firm's quantitative work and hiring standards. "
-        "Write comprehensive descriptions — do not truncate or summarise."
+        "You are a quant finance recruiting expert. Use Google Search to find accurate, "
+        "up-to-date information about the company and role before writing. "
+        "Ground your description in real job postings and public company information. "
+        "Write comprehensive, specific descriptions — do not truncate or summarise."
     )
 
     def _call(c: genai.Client) -> str:
@@ -188,6 +189,7 @@ def fetch_description(
             contents=types.Part.from_text(text=prompt),
             config=types.GenerateContentConfig(
                 system_instruction=sys,
+                tools=[types.Tool(google_search=types.GoogleSearch())],
                 max_output_tokens=1024,
             ),
         )
@@ -195,8 +197,8 @@ def fetch_description(
         if not text:
             print("      ⚠ Gemma returned empty response (safety filter / refusal)")
             return ""
-        if "UNKNOWN" in text or len(text) < 100:
-            print(f"      ⚠ Gemma: no knowledge of this role ({len(text)} chars)")
+        if len(text) < 100:
+            print(f"      ⚠ Gemma: response too short ({len(text)} chars)")
             return ""
         return text
 
