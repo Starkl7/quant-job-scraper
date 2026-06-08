@@ -4,8 +4,8 @@ Returns a normalized DataFrame matching the shared NORMALIZED_SCHEMA.
 """
 
 import random
+import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import pandas as pd
 from jobspy import scrape_jobs
@@ -996,20 +996,18 @@ _USER_AGENTS: list[str] = [
 def scrape_one(
     search_term: str,
     location: str,
-    country: str,
     results_wanted: int = JOBSPY_RESULTS_WANTED,
     hours_old: int = JOBSPY_HOURS_OLD,
 ) -> pd.DataFrame:
-    """Single JobSpy call with UA rotation. Returns raw DataFrame."""
+    """Single JobSpy LinkedIn-only call with UA rotation. Returns raw DataFrame."""
     ua = random.choice(_USER_AGENTS)
     return scrape_jobs(
-        site_name=["linkedin", "indeed"],
+        site_name=["linkedin"],
         search_term=search_term,
         location=location,
         results_wanted=results_wanted,
         hours_old=hours_old,
         job_type="fulltime",
-        country_indeed=country,
         linkedin_fetch_description=False,
         verbose=0,
         user_agent=ua,
@@ -1023,22 +1021,35 @@ def scrape_all(queries: list[tuple] = JOBSPY_QUERIES) -> pd.DataFrame:
     """
     frames: list[pd.DataFrame] = []
 
-    _QUERY_TIMEOUT = 90  # seconds — Indeed/LinkedIn can hang; skip and continue
+    _QUERY_TIMEOUT = 90  # seconds per query — LinkedIn can occasionally hang
 
-    for search_term, location, country in queries:
-        try:
-            with ThreadPoolExecutor(max_workers=1) as ex:
-                future = ex.submit(scrape_one, search_term, location, country)
-                df = future.result(timeout=_QUERY_TIMEOUT)
+    for search_term, location, _country in queries:   # _country unused (Indeed dropped)
+        result_box: list[pd.DataFrame] = []
+        exc_box:    list[Exception]    = []
+
+        def _worker(st=search_term, loc=location):
+            try:
+                result_box.append(scrape_one(st, loc))
+            except Exception as e:
+                exc_box.append(e)
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+        t.join(timeout=_QUERY_TIMEOUT)
+
+        if t.is_alive():
+            # Thread still running — hung HTTP connection. Move on; daemon thread
+            # will be cleaned up when the process exits.
+            print(f"  TIMEOUT ({_QUERY_TIMEOUT}s) — {search_term[:55]!r} @ {location} — skipping")
+        elif exc_box:
+            print(f"  ERROR — {search_term[:55]!r} @ {location}: {exc_box[0]}")
+        else:
+            df = result_box[0] if result_box else pd.DataFrame(columns=NORMALIZED_SCHEMA)
             if not df.empty:
                 frames.append(df)
                 print(f"  {len(df):>3} results — {search_term[:55]!r} @ {location}")
             else:
                 print(f"    0 results — {search_term[:55]!r} @ {location}")
-        except FuturesTimeoutError:
-            print(f"  TIMEOUT ({_QUERY_TIMEOUT}s) — {search_term[:55]!r} @ {location} — skipping")
-        except Exception as exc:
-            print(f"  ERROR — {search_term[:55]!r} @ {location}: {exc}")
 
         time.sleep(2)  # avoid LinkedIn rate-limits between queries
 

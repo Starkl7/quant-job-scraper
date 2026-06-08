@@ -25,6 +25,7 @@ jobs:
 
       - name: Run JobSpy scraper + score + push to Notion
         env:
+          PYTHONUNBUFFERED: "1"
           NOTION_TOKEN:           ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID:           ${{ secrets.NOTION_DB_ID }}
           GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
