@@ -208,17 +208,24 @@ def fetch_description(
         except Exception as exc:
             err = str(exc)
             is_rate_limit = "429" in err or "RESOURCE_EXHAUSTED" in err
-            if is_rate_limit and attempt == 0 and len(clients_to_try) > 1:
-                print("      ↺ 429 on Gemma primary — switching to backup key…")
+            is_last = attempt == len(clients_to_try) - 1
+
+            # Always try the backup key if primary fails for any reason
+            if not is_last:
+                reason = "429 rate limit" if is_rate_limit else type(exc).__name__
+                print(f"      ↺ Gemma primary failed ({reason}) — switching to backup key…")
                 continue
-            if is_rate_limit and attempt == len(clients_to_try) - 1:
-                print("      ↺ 429 on Gemma — waiting 10s then retrying…")
+
+            # On last client: one more attempt after a wait if rate-limited
+            if is_rate_limit:
+                print("      ↺ 429 on all Gemma keys — waiting 10s then retrying…")
                 time.sleep(10)
                 try:
                     return _call(c)
                 except Exception:
                     pass
-            print(f"      ⚠ fetch_description failed ({type(exc).__name__}): {str(exc)[:80]}")
+
+            print(f"      ⚠ fetch_description failed ({type(exc).__name__}): {str(exc)[:120]}")
     return ""
 
 
