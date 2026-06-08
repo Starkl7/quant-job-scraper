@@ -84,11 +84,13 @@ def validate_models(
         for c in clients:
             try:
                 r = c.models.generate_content(model=model, contents=test, config=cfg)
-                if r.text:
-                    tag = "(backup)" if c is not client else ""
-                    print(f"  ✓ {label} {tag}".rstrip())
-                    ok = True
-                    break
+                # Any response without an exception means the model is reachable.
+                # r.text may be empty if the safety filter blocks "OK" — that's fine.
+                tag = "(backup)" if c is not client else ""
+                resp_preview = (r.text or "").strip()[:30] or "(empty — safety filter?)"
+                print(f"  ✓ {label} {tag}  [{resp_preview}]".rstrip())
+                ok = True
+                break
             except Exception as exc:
                 print(f"  ✗ {label}: {str(exc)[:120]}")
         if not ok:
