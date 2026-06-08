@@ -5,6 +5,7 @@ Returns a normalized DataFrame matching the shared NORMALIZED_SCHEMA.
 
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import pandas as pd
 from jobspy import scrape_jobs
@@ -1022,14 +1023,20 @@ def scrape_all(queries: list[tuple] = JOBSPY_QUERIES) -> pd.DataFrame:
     """
     frames: list[pd.DataFrame] = []
 
+    _QUERY_TIMEOUT = 90  # seconds — Indeed/LinkedIn can hang; skip and continue
+
     for search_term, location, country in queries:
         try:
-            df = scrape_one(search_term, location, country)
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(scrape_one, search_term, location, country)
+                df = future.result(timeout=_QUERY_TIMEOUT)
             if not df.empty:
                 frames.append(df)
                 print(f"  {len(df):>3} results — {search_term[:55]!r} @ {location}")
             else:
                 print(f"    0 results — {search_term[:55]!r} @ {location}")
+        except FuturesTimeoutError:
+            print(f"  TIMEOUT ({_QUERY_TIMEOUT}s) — {search_term[:55]!r} @ {location} — skipping")
         except Exception as exc:
             print(f"  ERROR — {search_term[:55]!r} @ {location}: {exc}")
 
