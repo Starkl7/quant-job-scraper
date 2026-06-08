@@ -133,4 +133,4 @@ JOBSPY_QUERIES: list[tuple[str, str, str]] = [
 # ── JobSpy scrape parameters ──────────────────────────────────────────────────
 
 JOBSPY_RESULTS_WANTED = 200
-JOBSPY_HOURS_OLD      = 48
+JOBSPY_HOURS_OLD      = 72

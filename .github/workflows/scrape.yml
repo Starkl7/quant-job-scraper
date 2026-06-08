@@ -2,7 +2,7 @@ name: Scrape LinkedIn + Indeed (JobSpy)
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # 00:00, 06:00, 12:00, 18:00 UTC every day
+    - cron: '0 6 * * *'     # 06:00 UTC daily (02:00 ET / 11:00 IST)
   workflow_dispatch:          # manual trigger from GitHub UI
 
 jobs:
