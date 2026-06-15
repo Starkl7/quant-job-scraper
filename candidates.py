@@ -116,27 +116,56 @@ He is targeting entry-level and early-career quant roles. Evaluate every role wi
 {_EVALUATION_RULES}\
 """
 
-# Customize bio below as needed; resume PDFs are the source of truth for specifics.
+# Parsed from Drive folder 1C2ux-G4RQCISciPmvaeRltsd3rvvMy7V (Software, Trading, ML, Derivatives).
 SHREYANSH_RESUME_LABELS = ("Software", "Trading", "ML", "Derivatives")
 
 SHREYANSH_PROMPT = f"""\
 You are a career advisor evaluating job listings for a specific candidate.
 
-CANDIDATE: Shreyansh Sharma
-  • Read all four resume PDFs carefully; treat resume content as the source of truth
-    for degree, projects, internships, skills, and results when writing strengths.
-  • Customize this bio in candidates.py with graduation timeline and highlights
-    once you want tighter score calibration beyond what the PDFs contain.
+CANDIDATE: Shreyansh Kumar Sharma
+  • Master of Financial Mathematics, NC State University (GPA 3.96, graduating Dec 2026)
+  • B.S. Mathematics and Computing, IIT Kharagpur (GPA 3.37, Aug 2021–Jul 2025);
+    Micro Specialization in Entrepreneurship and Innovation
+  • Franklin Templeton Investments — Gen AI Product Engineering Intern & Co-op
+    (May 2024–Mar 2025): SQL-GPT chatbot (Django, OpenAI, React), Azure Postgres
+    query executor with territory-based access control, NLP/transformer pipeline
+    scoring 1,000+ sales notes for follow-up prediction, macro-signal synthesis
+    for client talking points
+  • Local volatility pricing framework on 5,000+ SPX contracts: SVI calibration
+    (2.47% IV RMSE, no-butterfly constraints), Dupire surface with isotonic
+    splines, Crank-Nicolson PDE engine (delta err <0.02, vega MAE <1)
+  • Lifted Volterra-Heston model: rough-Heston calibration to SPX vol surface,
+    kernel approximation to finite-dimensional Markov system, Monte Carlo +
+    Longstaff-Schwartz for American option early exercise
+  • Explainable autoencoder factor models for commodities (Morgan Stanley mentorship):
+    22 return series → 5 latent factors; forecast-based and temporal Shapley
+    decomposition for out-of-sample accuracy and regime shifts
+  • Pairs trading (AAPL/MSFT): Engle-Granger cointegration (p=0.042), half-life
+    8.2d, OOS Sharpe 1.5 / Sortino 3.1 (2024–2025); momentum L/S on S&P 500:
+    25% annual return, Sharpe 1.95, CAPM alpha 10.7%, beta 0.51
+  • Skills: Python, C++, SQL, R; NumPy, Pandas, SciPy, Scikit-learn, QuantLib,
+    PySpark; stochastic calculus, Monte Carlo, numerical methods, regression;
+    Bloomberg Terminal, QuantConnect, Databricks, Git/Docker
 
-The candidate has four tailored resumes (matched by filename substring):
-  Software    — software engineering, systems, infrastructure, and production code
-  Trading     — quantitative/systematic trading, execution, and markets-facing quant
-  ML          — machine learning, data science, and AI-driven quant research
-  Derivatives — derivatives pricing, vol, structuring, and fixed-income quant
+The candidate has four tailored resumes:
+  Software   — Full-stack & AI engineering in finance (Django, React, Streamlit,
+               LangChain, RAG/ChromaDB, SQL-GPT, OpenAI SDK, Docker, PostgreSQL;
+               ncBacktester OOP backtesting package on PyPI; KOSS leadership)
+  Trading    — Systematic trading & execution (pairs trading, cross-sectional
+               momentum L/S, Almgren-Chriss transaction-cost model on QuantConnect,
+               XGBoost/LogReg signal pipelines, ncBacktester, stress-testing
+               under transaction costs)
+  ML         — Machine learning & data-driven quant (nonlinear autoencoder factor
+               models, Shapley interpretability, XGBoost from scratch, technical-
+               indicator ML signals, Franklin Templeton NLP/transformer pipelines)
+  Derivatives — Derivatives pricing & volatility (local vol/SVI/Dupire/PDE Greeks,
+               Volterra-Heston American options, Bermudan swaption pricer in progress,
+               commodity factor models, QuantLib, fixed-income & options coursework)
 
 CAREER STAGE CONTEXT — READ CAREFULLY:
-The candidate is targeting entry-level and early-career quant roles. Evaluate every
-role with graduation timeline and internship/project experience in mind.
+The candidate graduates December 2026 with one year of industry experience (Franklin
+Templeton) plus substantial independent and course quant projects. He is targeting
+entry-level and early-career quant roles. Evaluate every role with this in mind.
 
 {_EVALUATION_RULES}\
 """
