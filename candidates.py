@@ -10,7 +10,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from config import RESUME_FOLDER_ID, RESUME_FOLDER_ID_DHRUBO, RESUME_FOLDER_ID_SHREYANSH, RESUME_LABELS
+from config import (
+    RESUME_FOLDER_ID,
+    RESUME_FOLDER_ID_DHRUBO,
+    RESUME_FOLDER_ID_SHREYANSH,
+    RESUME_LABELS,
+)
 from scoring import ScoreResult, batch_score, load_resumes, score_single
 
 
@@ -63,6 +68,7 @@ class Candidate:
     id: str
     display_name: str
     resume_folder_env: str
+    resume_labels: tuple[str, ...]
     fit_score_col: str
     best_resume_col: str
     ai_notes_col: str
@@ -110,21 +116,23 @@ He is targeting entry-level and early-career quant roles. Evaluate every role wi
 {_EVALUATION_RULES}\
 """
 
-# Customize this bio with your background before running in production.
+# Customize bio below as needed; resume PDFs are the source of truth for specifics.
+SHREYANSH_RESUME_LABELS = ("Software", "Trading", "ML", "Derivatives")
+
 SHREYANSH_PROMPT = f"""\
 You are a career advisor evaluating job listings for a specific candidate.
 
 CANDIDATE: Shreyansh Sharma
-  • Customize this section in candidates.py with your degree, graduation timeline,
-    internships, projects, and technical skills — the model uses this for calibration.
   • Read all four resume PDFs carefully; treat resume content as the source of truth
-    for specific skills, projects, and results when writing strengths.
+    for degree, projects, internships, skills, and results when writing strengths.
+  • Customize this bio in candidates.py with graduation timeline and highlights
+    once you want tighter score calibration beyond what the PDFs contain.
 
 The candidate has four tailored resumes (matched by filename substring):
-  QT   — Quantitative Trading
-  QR   — Quantitative Research
-  QA   — Quantitative Analytics
-  Risk — Model Risk / Model Validation
+  Software    — software engineering, systems, infrastructure, and production code
+  Trading     — quantitative/systematic trading, execution, and markets-facing quant
+  ML          — machine learning, data science, and AI-driven quant research
+  Derivatives — derivatives pricing, vol, structuring, and fixed-income quant
 
 CAREER STAGE CONTEXT — READ CAREFULLY:
 The candidate is targeting entry-level and early-career quant roles. Evaluate every
@@ -139,6 +147,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         id="dhrubo",
         display_name="Dhrubo",
         resume_folder_env="RESUME_FOLDER_ID_DHRUBO",
+        resume_labels=RESUME_LABELS,
         fit_score_col="Fit Score-Dhrubo",
         best_resume_col="Best Resume-Dhrubo",
         ai_notes_col="AI Notes-Dhrubo",
@@ -148,6 +157,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         id="shreyansh",
         display_name="Shreyansh",
         resume_folder_env="RESUME_FOLDER_ID_SHREYANSH",
+        resume_labels=SHREYANSH_RESUME_LABELS,
         fit_score_col="Fit Score-Shreyansh",
         best_resume_col="Best Resume-Shreyansh",
         ai_notes_col="AI Notes-Shreyansh",
@@ -182,7 +192,10 @@ def load_all_resumes(candidates: list[Candidate] | None = None) -> dict[str, dic
     resumes: dict[str, dict[str, bytes]] = {}
     for candidate in active:
         print(f"\n── {candidate.display_name} ({candidate.id}) ──")
-        resumes[candidate.id] = load_resumes(candidate.resume_folder_id())
+        resumes[candidate.id] = load_resumes(
+            candidate.resume_folder_id(),
+            labels=candidate.resume_labels,
+        )
     return resumes
 
 
@@ -213,6 +226,7 @@ def score_batch_all(
                 fetch_missing=fetch_missing,
                 backup_client=backup_client,
                 system_prompt=candidate.system_prompt,
+                resume_labels=candidate.resume_labels,
             )
         else:
             results[candidate.id] = batch_score(
@@ -222,6 +236,7 @@ def score_batch_all(
                 fetch_missing=False,
                 backup_client=backup_client,
                 system_prompt=candidate.system_prompt,
+                resume_labels=candidate.resume_labels,
             )
 
     return results
@@ -245,6 +260,7 @@ def score_single_all(
             client,
             backup_client=backup_client,
             system_prompt=candidate.system_prompt,
+            resume_labels=candidate.resume_labels,
         )
         for candidate in active
     }

@@ -105,14 +105,18 @@ def validate_models(
 
 # ── Resume loading ─────────────────────────────────────────────────────────────
 
-def load_resumes(folder_id: str = RESUME_FOLDER_ID) -> dict[str, bytes]:
+def load_resumes(
+    folder_id: str = RESUME_FOLDER_ID,
+    labels: tuple[str, ...] | None = None,
+) -> dict[str, bytes]:
     """
-    Download all 4 resume PDFs from the shared Google Drive folder.
+    Download resume PDFs from a shared Google Drive folder.
     Returns {label: pdf_bytes} — raw bytes sent directly to Gemini as inline data.
-    Matches files by label substring in filename (QT/QR/QA/Risk).
+    Matches files by label substring in filename.
     """
+    resume_labels = labels or RESUME_LABELS
     if not folder_id:
-        raise SystemExit("RESUME_FOLDER_ID env var is not set.")
+        raise SystemExit("Resume folder ID is not set.")
 
     print(f"Loading resumes from Drive folder {folder_id}…")
     file_map = _list_drive_folder(folder_id)
@@ -126,7 +130,7 @@ def load_resumes(folder_id: str = RESUME_FOLDER_ID) -> dict[str, bytes]:
     print(f"  Found {len(file_map)} file(s): {', '.join(file_map.keys())}")
     resumes: dict[str, bytes] = {}
 
-    for label in RESUME_LABELS:
+    for label in resume_labels:
         match = next(
             (fname for fname in file_map if label.lower() in fname.lower()), None
         )
@@ -242,6 +246,7 @@ def batch_score(
     fetch_missing: bool = True,
     backup_client: genai.Client | None = None,
     system_prompt: str | None = None,
+    resume_labels: tuple[str, ...] | None = None,
 ) -> list[ScoreResult | None]:
     """
     Score a batch of up to 10 jobs in a single LLM call.
@@ -253,10 +258,13 @@ def batch_score(
         fetch_missing: if True, call fetch_description() for jobs with no description
         backup_client: fallback genai.Client on 429 (different project = independent quota)
         system_prompt: candidate-specific evaluation prompt (defaults to Dhrubo)
+        resume_labels: resume variant names (defaults to config.RESUME_LABELS)
 
     Returns list[ScoreResult | None] — None entries are retried individually.
     """
     prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
+    labels = resume_labels or RESUME_LABELS
+    default_resume = labels[0]
     if not jobs:
         return []
 
@@ -291,12 +299,12 @@ def batch_score(
 
     # ── Build contents: PDF parts + jobs prompt ────────────────────────────────
     contents: list = []
-    for label in RESUME_LABELS:
+    for label in labels:
         contents.append(types.Part.from_text(text=f"=== RESUME: {label} ==="))
         contents.append(types.Part.from_bytes(
             data=resume_pdfs[label], mime_type="application/pdf"
         ))
-    contents.append(types.Part.from_text(text=_build_jobs_prompt(jobs)))
+    contents.append(types.Part.from_text(text=_build_jobs_prompt(jobs, labels)))
 
     # ── Single LLM call with key fallback ─────────────────────────────────────
     results: list[ScoreResult | None] = [None] * len(jobs)
@@ -309,7 +317,7 @@ def batch_score(
                 contents=contents,
                 config=types.GenerateContentConfig(system_instruction=prompt),
             )
-            results = _parse_batch_response(response.text, len(jobs))
+            results = _parse_batch_response(response.text, len(jobs), default_resume)
             break
         except Exception as exc:
             err = str(exc)
@@ -331,7 +339,8 @@ def batch_score(
             print(f"    ↺ Retrying job {i+1} individually…")
             time.sleep(5)
             results[i] = score_single(
-                jobs[i], resume_pdfs, client, backup_client, system_prompt=prompt,
+                jobs[i], resume_pdfs, client, backup_client,
+                system_prompt=prompt, resume_labels=labels,
             )
 
     return results
@@ -345,6 +354,7 @@ def score_single(
     client: genai.Client,
     backup_client: genai.Client | None = None,
     system_prompt: str | None = None,
+    resume_labels: tuple[str, ...] | None = None,
 ) -> ScoreResult | None:
     """
     Score one job with a direct LLM call.
@@ -353,13 +363,15 @@ def score_single(
     re-score pass in the orchestrators.
     """
     prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
+    labels = resume_labels or RESUME_LABELS
+    default_resume = labels[0]
     contents: list = []
-    for label in RESUME_LABELS:
+    for label in labels:
         contents.append(types.Part.from_text(text=f"=== RESUME: {label} ==="))
         contents.append(types.Part.from_bytes(
             data=resume_pdfs[label], mime_type="application/pdf"
         ))
-    contents.append(types.Part.from_text(text=_build_jobs_prompt([job])))
+    contents.append(types.Part.from_text(text=_build_jobs_prompt([job], labels)))
 
     clients_to_try = [c for c in [client, backup_client] if c]
 
@@ -370,7 +382,7 @@ def score_single(
                 contents=contents,
                 config=types.GenerateContentConfig(system_instruction=prompt),
             )
-            parsed = _parse_batch_response(response.text, 1)
+            parsed = _parse_batch_response(response.text, 1, default_resume)
             if parsed[0] is not None:
                 return parsed[0]
         except Exception as exc:
@@ -467,7 +479,8 @@ def _trim_description(desc: str, max_chars: int = 4000) -> str:
     return desc[:max_chars].strip()
 
 
-def _build_jobs_prompt(jobs: list[dict]) -> str:
+def _build_jobs_prompt(jobs: list[dict], resume_labels: tuple[str, ...]) -> str:
+    label_options = "|".join(resume_labels)
     jobs_block = ""
     for i, job in enumerate(jobs, 1):
         desc = str(job.get("description", "")).strip()
@@ -500,7 +513,7 @@ fences, no text outside the array.
 Schema for each object:
 {{
   "job":            <integer, 1-based>,
-  "best_resume":    "<QT|QR|QA|Risk>",
+  "best_resume":    "<{label_options}>",
   "fit_score":      <integer 1–10>,
   "strengths":      "<2–3 concrete strengths, pipe-separated>",
   "weaknesses":     "<1–2 honest gaps or concerns, pipe-separated>",
@@ -528,7 +541,11 @@ Examples of BAD strengths (vague or inferred — do not write these):
 
 # ── Response parsing ───────────────────────────────────────────────────────────
 
-def _parse_batch_response(text: str, n_jobs: int) -> list[ScoreResult | None]:
+def _parse_batch_response(
+    text: str,
+    n_jobs: int,
+    default_resume: str = "QR",
+) -> list[ScoreResult | None]:
     """Parse JSON array from LLM response. Robust to markdown fences."""
     text = re.sub(r"```(?:json)?|```", "", text).strip()
     match = re.search(r'\[.*\]', text, re.DOTALL)
@@ -548,7 +565,7 @@ def _parse_batch_response(text: str, n_jobs: int) -> list[ScoreResult | None]:
                 continue
             results[idx] = ScoreResult(
                 fit_score      = max(1, min(10, int(item.get("fit_score", 5)))),
-                best_resume    = str(item.get("best_resume", "QR")),
+                best_resume    = str(item.get("best_resume", default_resume)),
                 strengths      = str(item.get("strengths",  "")).strip(),
                 weaknesses     = str(item.get("weaknesses", "")).strip(),
                 low_confidence = bool(item.get("low_confidence", False)),

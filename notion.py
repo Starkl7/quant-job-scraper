@@ -232,6 +232,7 @@ def _normalize_scores(scores, candidates: list[Candidate] | None = None) -> list
         id="legacy",
         display_name="Legacy",
         resume_folder_env="",
+        resume_labels=("QT", "QR", "QA", "Risk"),
         fit_score_col="Fit Score",
         best_resume_col="Best Resume",
         ai_notes_col="AI Notes",
