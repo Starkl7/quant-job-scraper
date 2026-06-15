@@ -10,31 +10,19 @@ Schedule: every 6 hours via GitHub Actions (scrape.yml).
 Run locally: python run_jobspy.py
 """
 
-import time
 from datetime import datetime, timezone
-from itertools import islice
 
 from dotenv import load_dotenv
 load_dotenv()
 
 import notion
-from config import (
-    NOTION_TOKEN, NOTION_DB_ID, GEMINI_API_KEY,
-    SCORING_BATCH_SIZE, JOBSPY_QUERIES,
-)
+from config import NOTION_TOKEN, NOTION_DB_ID, GEMINI_API_KEY
+from candidates import get_configured_candidates, load_all_resumes
 from filters import apply_filters
 from notify import send_slack
-from scoring import (
-    init_clients, load_resumes, batch_score,
-    fetch_description, score_single, validate_models,
-)
+from pipeline import retry_low_confidence_jobs, score_and_push_jobs
+from scoring import init_clients, validate_models
 from scrapers.jobspy import scrape_all
-
-
-def _chunked(iterable, n):
-    it = iter(iterable)
-    while batch := list(islice(it, n)):
-        yield batch
 
 
 def main() -> None:
@@ -57,7 +45,10 @@ def main() -> None:
     else:
         print("  ⚠ No backup Gemini key (GEMINI_API_KEY_2 not set or same project)")
     validate_models(client, backup)
-    resumes = load_resumes()
+
+    candidates = get_configured_candidates()
+    print(f"  Active candidates: {', '.join(c.display_name for c in candidates)}")
+    resumes_by_candidate = load_all_resumes(candidates)
     print()
 
     # ── Phase 1: Scrape, filter, dedup ────────────────────────────────────────
@@ -94,61 +85,15 @@ def main() -> None:
     # ── Phase 2: Score + push ─────────────────────────────────────────────────
     print("3/3  Scoring and pushing to Notion…\n")
 
-    added           = 0
-    failed_push     = []          # list of (job, score) that failed Notion push
-    low_conf_queue  = []          # list of (job, page_id) for retry pass
-    jobs_list       = net_new.to_dict("records")
-    source_counts: dict[str, int] = {}
+    jobs_list = net_new.to_dict("records")
+    added, failed_push, low_conf_queue, source_counts = score_and_push_jobs(
+        jobs_list, client, backup, resumes_by_candidate, candidates,
+    )
 
-    for batch in _chunked(jobs_list, SCORING_BATCH_SIZE):
-        scores = batch_score(batch, resumes, client,
-                             fetch_missing=True, backup_client=backup)
-
-        for job, score in zip(batch, scores):
-            page_id = notion.push_job(job, score)
-            if page_id:
-                added += 1
-                existing_keys.add(job["_dedup_key"])
-                src = str(job.get("site", "other"))
-                source_counts[src] = source_counts.get(src, 0) + 1
-                # Queue for retry if scored without a description
-                if (score and score.low_confidence
-                        and job.get("_was_no_desc") and not job.get("_fetched_chars")):
-                    low_conf_queue.append((job, page_id))
-            else:
-                failed_push.append((job, score))
-            time.sleep(0.35)
-
-        # Gemini free tier: 15 RPM → 5s between batches
-        time.sleep(5)
-
-    # ── Phase 3: Low-confidence retries (up to 2 attempts per job) ───────────
-    re_scored        = 0
-    still_needs_desc = list(low_conf_queue)
-    for retry_num in range(1, 3):
-        if not still_needs_desc:
-            break
-        print(f"\n  ↺ Retry {retry_num}/2: {len(still_needs_desc)} job(s) still missing descriptions…")
-        next_round = []
-        for job, page_id in still_needs_desc:
-            time.sleep(5)
-            fetched = fetch_description(
-                client, job.get("title", ""), job.get("company", ""),
-                job.get("location", ""), backup_client=backup,
-            )
-            if not fetched:
-                print(f"    → still no description: {job.get('title', '')[:40]}")
-                next_round.append((job, page_id))
-                continue
-            job["description"]    = fetched
-            job["_fetched_chars"] = len(fetched)
-            new_score = score_single(job, resumes, client, backup_client=backup)
-            if new_score:
-                new_score.low_confidence = False
-                if notion.update_job_score(page_id, new_score, description=fetched):
-                    re_scored += 1
-                    print(f"    ✓ re-scored {new_score.fit_score}/10 — {job.get('title', '')[:40]}")
-        still_needs_desc = next_round
+    # ── Phase 3: Low-confidence retries ───────────────────────────────────────
+    re_scored = retry_low_confidence_jobs(
+        low_conf_queue, client, backup, resumes_by_candidate, candidates,
+    )
 
     # ── Log failed pushes ──────────────────────────────────────────────────────
     if failed_push:

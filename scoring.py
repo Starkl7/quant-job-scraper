@@ -241,6 +241,7 @@ def batch_score(
     client: genai.Client,
     fetch_missing: bool = True,
     backup_client: genai.Client | None = None,
+    system_prompt: str | None = None,
 ) -> list[ScoreResult | None]:
     """
     Score a batch of up to 10 jobs in a single LLM call.
@@ -251,9 +252,11 @@ def batch_score(
         client:        primary genai.Client
         fetch_missing: if True, call fetch_description() for jobs with no description
         backup_client: fallback genai.Client on 429 (different project = independent quota)
+        system_prompt: candidate-specific evaluation prompt (defaults to Dhrubo)
 
     Returns list[ScoreResult | None] — None entries are retried individually.
     """
+    prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
     if not jobs:
         return []
 
@@ -304,7 +307,7 @@ def batch_score(
             response = c.models.generate_content(
                 model=SCORING_MODEL,
                 contents=contents,
-                config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
+                config=types.GenerateContentConfig(system_instruction=prompt),
             )
             results = _parse_batch_response(response.text, len(jobs))
             break
@@ -327,7 +330,9 @@ def batch_score(
         if result is None:
             print(f"    ↺ Retrying job {i+1} individually…")
             time.sleep(5)
-            results[i] = score_single(jobs[i], resume_pdfs, client, backup_client)
+            results[i] = score_single(
+                jobs[i], resume_pdfs, client, backup_client, system_prompt=prompt,
+            )
 
     return results
 
@@ -339,6 +344,7 @@ def score_single(
     resume_pdfs: dict[str, bytes],
     client: genai.Client,
     backup_client: genai.Client | None = None,
+    system_prompt: str | None = None,
 ) -> ScoreResult | None:
     """
     Score one job with a direct LLM call.
@@ -346,6 +352,7 @@ def score_single(
     Used as the retry fallback inside batch_score and for the low-confidence
     re-score pass in the orchestrators.
     """
+    prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
     contents: list = []
     for label in RESUME_LABELS:
         contents.append(types.Part.from_text(text=f"=== RESUME: {label} ==="))
@@ -361,7 +368,7 @@ def score_single(
             response = c.models.generate_content(
                 model=SCORING_MODEL,
                 contents=contents,
-                config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
+                config=types.GenerateContentConfig(system_instruction=prompt),
             )
             parsed = _parse_batch_response(response.text, 1)
             if parsed[0] is not None:
@@ -376,9 +383,9 @@ def score_single(
     return None
 
 
-# ── System prompt ──────────────────────────────────────────────────────────────
+# ── Default system prompt (backward-compatible; prefer candidates.py) ──────────
 
-_SYSTEM_PROMPT = """\
+_DEFAULT_SYSTEM_PROMPT = """\
 You are a career advisor evaluating job listings for a specific candidate.
 
 CANDIDATE: Dhrubojeet Haldar

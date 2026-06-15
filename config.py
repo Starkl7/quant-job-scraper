@@ -10,7 +10,9 @@ import os
 NOTION_TOKEN     = os.environ.get("NOTION_TOKEN",      "")
 NOTION_DB_ID     = os.environ.get("NOTION_DB_ID",      "")
 GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY",    "")
-RESUME_FOLDER_ID = os.environ.get("RESUME_FOLDER_ID",  "")
+RESUME_FOLDER_ID          = os.environ.get("RESUME_FOLDER_ID",          "")
+RESUME_FOLDER_ID_DHRUBO   = os.environ.get("RESUME_FOLDER_ID_DHRUBO",   "") or RESUME_FOLDER_ID
+RESUME_FOLDER_ID_SHREYANSH = os.environ.get("RESUME_FOLDER_ID_SHREYANSH", "")
 SERPAPI_KEY_1    = os.environ.get("SERPAPI_KEY_1",      "")
 SERPAPI_KEY_2    = os.environ.get("SERPAPI_KEY_2",      "")
 

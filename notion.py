@@ -11,6 +11,7 @@ import pandas as pd
 
 from config import NOTION_TOKEN, NOTION_DB_ID, NOTION_API_VERSION, SOURCE_MAP
 from filters import extract_exp_req
+from candidates import Candidate, get_configured_candidates
 
 HEADERS = {
     "Authorization":  f"Bearer {NOTION_TOKEN}",
@@ -84,7 +85,7 @@ def get_existing_keys() -> set[str]:
 
 # ── Write — create new page ────────────────────────────────────────────────────
 
-def push_job(row: pd.Series, score=None) -> "str | bool":
+def push_job(row: pd.Series, scores=None, candidates: list[Candidate] | None = None) -> "str | bool":
     """
     Create one Notion page for a job listing.
 
@@ -95,7 +96,8 @@ def push_job(row: pd.Series, score=None) -> "str | bool":
     Args:
         row:   pd.Series — keys: title, company, location, site, job_url,
                description, min_amount, max_amount, date_posted
-        score: optional ScoreResult from scoring.py
+        scores: dict[candidate_id, ScoreResult] or a single ScoreResult (legacy)
+        candidates: optional list of Candidate configs for column names
     """
     source   = SOURCE_MAP.get(str(row.get("site", "")).lower(), "Other")
     title    = str(row.get("title",    "Unknown Role"))[:2000]
@@ -138,13 +140,10 @@ def push_job(row: pd.Series, score=None) -> "str | bool":
             "rich_text": [{"text": {"content": raw_desc[:2000]}}]
         }
 
-    # Inline scoring fields
-    if score is not None:
-        payload["properties"]["Fit Score"]   = {"number": int(score.fit_score)}
-        payload["properties"]["Best Resume"] = {"select": {"name": score.best_resume}}
-        payload["properties"]["AI Notes"]    = {
-            "rich_text": [{"text": {"content": _format_ai_notes(score)[:2000]}}]
-        }
+    # Inline scoring fields (per-candidate columns)
+    score_props = _score_properties(scores, candidates)
+    if score_props:
+        payload["properties"].update(score_props)
 
     for attempt in range(_MAX_PUSH_RETRIES + 1):
         resp = requests.post(
@@ -165,21 +164,25 @@ def push_job(row: pd.Series, score=None) -> "str | bool":
 
 # ── Write — update existing page ───────────────────────────────────────────────
 
-def update_job_score(page_id: str, score, description: str = "") -> bool:
+def update_job_score(
+    page_id: str,
+    scores,
+    description: str = "",
+    candidates: list[Candidate] | None = None,
+) -> bool:
     """
     PATCH an existing Notion page with updated scoring fields only.
     Used by the low-confidence retry pass after a description is fetched.
     Also writes Description if provided.
-    """
-    ai_notes = _format_ai_notes(score)
 
-    payload: dict = {
-        "properties": {
-            "Fit Score":   {"number": int(score.fit_score)},
-            "Best Resume": {"select": {"name": score.best_resume}},
-            "AI Notes":    {"rich_text": [{"text": {"content": ai_notes[:2000]}}]},
-        }
-    }
+    Args:
+        scores: dict[candidate_id, ScoreResult] or a single ScoreResult (legacy)
+    """
+    score_props = _score_properties(scores, candidates)
+    if not score_props:
+        return False
+
+    payload: dict = {"properties": score_props}
     if description:
         payload["properties"]["Description"] = {
             "rich_text": [{"text": {"content": description[:2000]}}]
@@ -202,6 +205,50 @@ def update_job_score(page_id: str, score, description: str = "") -> bool:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _normalize_scores(scores, candidates: list[Candidate] | None = None) -> list[tuple[Candidate, object]]:
+    """Convert legacy single ScoreResult or dict into [(Candidate, ScoreResult), ...]."""
+    if scores is None:
+        return []
+
+    active = candidates or get_configured_candidates()
+
+    if isinstance(scores, dict):
+        out = []
+        for candidate in active:
+            score = scores.get(candidate.id)
+            if score is not None:
+                out.append((candidate, score))
+        return out
+
+    if len(active) == 1:
+        return [(active[0], scores)]
+    if len(active) > 1:
+        raise ValueError(
+            "Multiple candidates configured but push_job received a single ScoreResult. "
+            "Pass a dict[candidate_id, ScoreResult] instead."
+        )
+    return [(Candidate(
+        id="legacy",
+        display_name="Legacy",
+        resume_folder_env="",
+        fit_score_col="Fit Score",
+        best_resume_col="Best Resume",
+        ai_notes_col="AI Notes",
+        system_prompt="",
+    ), scores)]
+
+
+def _score_properties(scores, candidates: list[Candidate] | None = None) -> dict:
+    props: dict = {}
+    for candidate, score in _normalize_scores(scores, candidates):
+        props[candidate.fit_score_col] = {"number": int(score.fit_score)}
+        props[candidate.best_resume_col] = {"select": {"name": score.best_resume}}
+        props[candidate.ai_notes_col] = {
+            "rich_text": [{"text": {"content": _format_ai_notes(score)[:2000]}}]
+        }
+    return props
+
 
 def _rich_text(prop: dict) -> str:
     return "".join(t.get("plain_text", "") for t in prop.get("rich_text", []))

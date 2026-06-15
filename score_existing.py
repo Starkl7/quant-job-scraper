@@ -1,11 +1,12 @@
 """
-score_existing.py — Back-fill Fit Score / Best Resume / AI Notes for all existing
-Notion listings that have not yet been scored.
+score_existing.py — Back-fill fit scores for all existing Notion listings
+that have not yet been scored for one or more candidates.
 
 NOT FOR GITHUB ACTIONS — run locally only. Runtime: 10–55 min depending on mode.
 
-Fetches every page where Fit Score is empty, scores them in batches of 10 using
-the same Gemini pipeline as the live scrapers, then PATCHes each page in place.
+Fetches every page where any candidate's Fit Score column is empty, scores them
+in batches of 10 using the same Gemini pipeline as the live scrapers, then
+PATCHes each page in place.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MODES  (toggle FETCH_MISSING_DESCRIPTIONS below)
@@ -32,13 +33,18 @@ load_dotenv()
 
 from config import (
     NOTION_TOKEN, NOTION_DB_ID, NOTION_API_VERSION,
-    GEMINI_API_KEY, RESUME_FOLDER_ID, SCORING_BATCH_SIZE,
+    GEMINI_API_KEY, SCORING_BATCH_SIZE,
 )
-from scoring import (
-    init_clients, load_resumes, batch_score, score_single,
-    fetch_description, validate_models, ScoreResult,
+from candidates import (
+    Candidate,
+    any_low_confidence,
+    get_configured_candidates,
+    load_all_resumes,
+    score_batch_all,
+    score_single_all,
 )
-from notion import validate_db
+from scoring import fetch_description, init_clients, validate_models, ScoreResult
+from notion import validate_db, update_job_score
 
 # ── Toggle here ────────────────────────────────────────────────────────────────
 FETCH_MISSING_DESCRIPTIONS = True   # False = fast run (~10 min), True = full quality (~50 min)
@@ -64,17 +70,23 @@ def _select_name(prop: dict) -> str:
     return sel.get("name", "") if sel else ""
 
 
+
 # ── Fetch unscored pages ───────────────────────────────────────────────────────
 
-def fetch_all_unscored() -> list[dict]:
+def fetch_all_unscored(candidates: list[Candidate]) -> list[dict]:
     """
-    Query Notion for every page where Fit Score is empty.
-    Returns a list of dicts with page_id + the fields needed for scoring.
+    Query Notion for pages missing a fit score for any configured candidate.
+    Returns job dicts with page_id + fields needed for scoring.
     """
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload: dict = {
         "page_size": 100,
-        "filter": {"property": "Fit Score", "number": {"is_empty": True}},
+        "filter": {
+            "or": [
+                {"property": c.fit_score_col, "number": {"is_empty": True}}
+                for c in candidates
+            ]
+        },
     }
     jobs: list[dict] = []
 
@@ -102,55 +114,21 @@ def fetch_all_unscored() -> list[dict]:
     return jobs
 
 
-# ── Patch score + description back to Notion ──────────────────────────────────
-
-def patch_score(page_id: str, score: ScoreResult, description: str = "") -> bool:
-    """
-    PATCH scoring fields + optionally Description onto an existing page.
-    Leaves all other fields (Role, Company, Status, etc.) untouched.
-    Retries up to 2 times on transient errors.
-    """
-    parts = []
-    if score.strengths:
-        parts.append(f"Strengths: {score.strengths}")
-    if score.weaknesses:
-        parts.append(f"Weaknesses: {score.weaknesses}")
-    if score.low_confidence:
-        parts.append("⚠ Scored on title/company only — no description available")
-    ai_notes = "\n".join(parts)
-
-    payload: dict = {
-        "properties": {
-            "Fit Score":   {"number": int(score.fit_score)},
-            "Best Resume": {"select": {"name": score.best_resume}},
-            "AI Notes":    {"rich_text": [{"text": {"content": ai_notes[:2000]}}]},
-        }
-    }
-    if description:
-        payload["properties"]["Description"] = {
-            "rich_text": [{"text": {"content": description[:2000]}}]
-        }
-
-    for attempt in range(3):
-        resp = requests.patch(
-            f"https://api.notion.com/v1/pages/{page_id}",
-            headers=HEADERS, json=payload, timeout=30,
-        )
-        if resp.status_code == 200:
-            return True
-        if attempt < 2:
-            time.sleep(3)
-
-    print(f"    ✗ PATCH failed ({resp.status_code}): {resp.text[:120]}")
-    return False
-
-
 # ── Orchestration ──────────────────────────────────────────────────────────────
 
 def _chunked(iterable, n):
     it = iter(iterable)
     while batch := list(islice(it, n)):
         yield batch
+
+
+def _format_score_line(scores: dict[str, ScoreResult | None], candidates: list[Candidate]) -> str:
+    parts = []
+    for candidate in candidates:
+        score = scores.get(candidate.id)
+        if score:
+            parts.append(f"{candidate.display_name}:{score.fit_score}/{score.best_resume}")
+    return "  ".join(parts)
 
 
 def main() -> None:
@@ -174,11 +152,14 @@ def main() -> None:
     if backup:
         print("  ✓ Backup Gemini key available")
     validate_models(client, backup)
+
+    candidates = get_configured_candidates()
+    print(f"  Active candidates: {', '.join(c.display_name for c in candidates)}")
     print()
 
     # ── Fetch unscored pages ──────────────────────────────────────────────────
     print("1/3  Fetching unscored Notion pages…")
-    jobs  = fetch_all_unscored()
+    jobs  = fetch_all_unscored(candidates)
     total = len(jobs)
     n_with_desc    = sum(1 for j in jobs if j["description"].strip())
     n_without_desc = total - n_with_desc
@@ -189,13 +170,13 @@ def main() -> None:
         return
 
     est_gemma   = n_without_desc * 6 if FETCH_MISSING_DESCRIPTIONS else 0
-    est_gemini  = (total // SCORING_BATCH_SIZE + 1) * 6
+    est_gemini  = (total // SCORING_BATCH_SIZE + 1) * 6 * len(candidates)
     est_min     = round((est_gemma + est_gemini) / 60) + 2
     print(f"     Estimated runtime: ~{est_min} min\n")
 
     # ── Load resumes ──────────────────────────────────────────────────────────
     print("2/3  Loading resumes from Drive…")
-    resumes = load_resumes()
+    resumes_by_candidate = load_all_resumes(candidates)
     print()
 
     # ── Score + patch in batches ──────────────────────────────────────────────
@@ -204,37 +185,45 @@ def main() -> None:
     done            = 0
     updated         = 0
     failed          = 0
-    low_conf_queue  = []     # (job, page_id) that got no description on first pass
+    low_conf_queue  = []
     t_start         = time.time()
 
     for batch_num, batch in enumerate(_chunked(jobs, SCORING_BATCH_SIZE), 1):
         n_batch = len(batch)
         print(f"  ── Batch {batch_num}  [{done+1}–{done+n_batch} / {total}] ──")
 
-        scores = batch_score(
-            batch, resumes, client,
+        scores_by_candidate = score_batch_all(
+            batch, resumes_by_candidate, client,
             fetch_missing=FETCH_MISSING_DESCRIPTIONS,
             backup_client=backup,
+            candidates=candidates,
         )
 
-        for job, score in zip(batch, scores):
+        for job_idx, job in enumerate(batch):
             done += 1
             role    = job["title"][:42]
             company = job["company"][:22]
             desc    = job.get("description", "")
 
-            if score is None:
+            scores = {
+                candidate.id: scores_by_candidate[candidate.id][job_idx]
+                for candidate in candidates
+            }
+
+            if any(score is None for score in scores.values()):
                 print(f"    [{done:>3}/{total}] ✗ parse fail — {role} @ {company}")
                 failed += 1
                 continue
 
-            ok = patch_score(job["page_id"], score, description=desc)
+            ok = update_job_score(
+                job["page_id"], scores, description=desc, candidates=candidates,
+            )
             if ok:
-                conf_tag = " ⚠low-conf" if score.low_confidence else ""
-                print(f"    [{done:>3}/{total}] {score.fit_score:>2}/10  {score.best_resume:<5}{conf_tag}  {role} @ {company}")
+                conf_tag = " ⚠low-conf" if any_low_confidence(scores, job) else ""
+                score_line = _format_score_line(scores, candidates)
+                print(f"    [{done:>3}/{total}] {score_line}{conf_tag}  {role} @ {company}")
                 updated += 1
-                if (score.low_confidence
-                        and job.get("_was_no_desc") and not job.get("_fetched_chars")):
+                if any_low_confidence(scores, job):
                     low_conf_queue.append((job, job["page_id"]))
             else:
                 failed += 1
@@ -267,12 +256,16 @@ def main() -> None:
                 continue
             job["description"]    = fetched
             job["_fetched_chars"] = len(fetched)
-            new_score = score_single(job, resumes, client, backup_client=backup)
-            if new_score:
-                new_score.low_confidence = False
-                if patch_score(page_id, new_score, description=fetched):
-                    re_scored += 1
-                    print(f"    ✓ re-scored {new_score.fit_score}/10 — {job.get('title','')[:40]}")
+            new_scores = score_single_all(
+                job, resumes_by_candidate, client,
+                backup_client=backup, candidates=candidates,
+            )
+            for score in new_scores.values():
+                if score:
+                    score.low_confidence = False
+            if update_job_score(page_id, new_scores, description=fetched, candidates=candidates):
+                re_scored += 1
+                print(f"    ✓ re-scored — {_format_score_line(new_scores, candidates)} — {job.get('title','')[:40]}")
         still_needs_desc = next_round
 
     elapsed_total = (time.time() - t_start) / 60
