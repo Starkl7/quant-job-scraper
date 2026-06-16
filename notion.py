@@ -175,9 +175,9 @@ def update_job_score(page_id: str, score, description: str = "") -> bool:
 
     payload: dict = {
         "properties": {
-            "Fit Score":   {"number": int(score.fit_score)},
-            "Best Resume": {"select": {"name": score.best_resume}},
-            "AI Notes":    {"rich_text": [{"text": {"content": ai_notes[:2000]}}]},
+            "Fit Score-Dhrubo":   {"number": int(score.fit_score)},
+            "Best Resume-Dhrubo": {"select": {"name": score.best_resume}},
+            "AI Notes-Dhrubo":    {"rich_text": [{"text": {"content": ai_notes[:2000]}}]},
         }
     }
     if description:
