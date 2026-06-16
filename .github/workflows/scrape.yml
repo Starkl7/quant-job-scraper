@@ -8,7 +8,7 @@ on:
 jobs:
   scrape-jobspy:
     runs-on: ubuntu-latest
-    timeout-minutes: 90       # 54 queries × ~30s each ≈ 27 min; buffer for scoring + retry pass
+    timeout-minutes: 600      # 54 queries × ~30s each ≈ 27 min; buffer for scoring + retry pass
 
     steps:
       - name: Checkout repo
