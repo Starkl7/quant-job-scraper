@@ -95,6 +95,7 @@ def main() -> None:
     print("3/3  Scoring and pushing to Notion…\n")
 
     added           = 0
+    visa_dropped    = 0
     failed_push     = []          # list of (job, score) that failed Notion push
     low_conf_queue  = []          # list of (job, page_id) for retry pass
     jobs_list       = net_new.to_dict("records")
@@ -105,6 +106,10 @@ def main() -> None:
                              fetch_missing=True, backup_client=backup)
 
         for job, score in zip(batch, scores):
+            if score and score.visa_sponsored is False:
+                print(f"    ✗ no visa sponsorship — skipping: {job.get('title','')[:40]} @ {job.get('company','')[:20]}")
+                visa_dropped += 1
+                continue
             page_id = notion.push_job(job, score)
             if page_id:
                 added += 1
@@ -132,7 +137,7 @@ def main() -> None:
         next_round = []
         for job, page_id in still_needs_desc:
             time.sleep(5)
-            fetched = fetch_description(
+            fetched, visa_ok = fetch_description(
                 client, job.get("title", ""), job.get("company", ""),
                 job.get("location", ""), backup_client=backup,
             )
@@ -140,10 +145,18 @@ def main() -> None:
                 print(f"    → still no description: {job.get('title', '')[:40]}")
                 next_round.append((job, page_id))
                 continue
+            if visa_ok is False:
+                print(f"    ✗ no visa sponsorship — skipping: {job.get('title', '')[:40]}")
+                visa_dropped += 1
+                continue
             job["description"]    = fetched
             job["_fetched_chars"] = len(fetched)
             new_score = score_single(job, resumes, client, backup_client=backup)
             if new_score:
+                if new_score.visa_sponsored is False:
+                    print(f"    ✗ no visa sponsorship (re-scored) — skipping: {job.get('title', '')[:40]}")
+                    visa_dropped += 1
+                    continue
                 new_score.low_confidence = False
                 if notion.update_job_score(page_id, new_score, description=fetched):
                     re_scored += 1
@@ -160,7 +173,7 @@ def main() -> None:
     src_str = "  ".join(f"{k}:{v}" for k, v in sorted(source_counts.items()))
     lines = [
         f"🤖 *JobSpy (LinkedIn + Indeed)* — {ts}",
-        f"✅ {added} added  |  ❌ {len(failed_push)} failed  |  🔄 {re_scored}/{len(low_conf_queue)} re-scored after retry",
+        f"✅ {added} added  |  ❌ {len(failed_push)} failed  |  🔄 {re_scored}/{len(low_conf_queue)} re-scored after retry  |  🚫 {visa_dropped} visa-denied dropped",
         f"📌 Sources: {src_str or 'none'}",
     ]
     if failed_push:

@@ -257,7 +257,7 @@ def main() -> None:
         next_round = []
         for job, page_id in still_needs_desc:
             time.sleep(5)
-            fetched = fetch_description(
+            fetched, _ = fetch_description(
                 client, job.get("title",""), job.get("company",""),
                 job.get("location",""), backup_client=backup,
             )

@@ -64,7 +64,6 @@ RISK_TERM = (
     '("quantitative risk analyst" OR "quant risk analyst" OR "risk quant" '
     'OR "market risk quant" OR "quant risk") -developer'
 )
-
 # ── SerpAPI search terms (Google Jobs) ────────────────────────────────────────
 # Simple OR chains — complex parenthesised boolean causes zero-result errors
 # on Google Jobs when combined with date filters.

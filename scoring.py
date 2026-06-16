@@ -34,7 +34,8 @@ class ScoreResult:
     best_resume:    str          # QT | QR | QA | Risk
     strengths:      str          # 2–3 concrete points, pipe-separated
     weaknesses:     str          # 1–2 honest gaps, pipe-separated
-    low_confidence: bool = False # True when description was unavailable
+    low_confidence: bool = False      # True when description was unavailable
+    visa_sponsored: bool | None = None  # False = explicitly denied; None = not mentioned
 
 
 # ── Client initialisation ──────────────────────────────────────────────────────
@@ -155,7 +156,7 @@ def fetch_description(
     location: str,
     job_url: str = "",
     backup_client: genai.Client | None = None,
-) -> str:
+) -> tuple[str, bool | None]:
     """
     Generate a job description using Gemma 4 31B with Google Search grounding.
     Grounding gives the model access to real-time web data, avoiding training-cutoff
@@ -176,7 +177,12 @@ def fetch_description(
         f'5. Preferred / Nice-to-have: additional skills or experience that strengthen candidacy\n\n'
         f'Be specific to {company} — use real details from their actual postings or public information. '
         f'No company overview, no benefits section, no EEO boilerplate. '
-        f'Aim for 400-600 words total.'
+        f'Aim for 400-600 words total.\n\n'
+        f'At the very end of your response, on a new line by itself, output exactly one of:\n'
+        f'VISA: SPONSORED     — the posting explicitly states visa sponsorship is available\n'
+        f'VISA: NOT_SPONSORED — the posting explicitly states no sponsorship '
+        f'(e.g. "will not sponsor", "must be authorised to work", "no visa sponsorship")\n'
+        f'VISA: UNKNOWN       — visa/work authorisation is not mentioned in the posting'
     )
     sys = (
         "You are a quant finance recruiting expert. Use Google Search to find accurate, "
@@ -185,7 +191,7 @@ def fetch_description(
         "Write comprehensive, specific descriptions — do not truncate or summarise."
     )
 
-    def _call(c: genai.Client) -> str:
+    def _call(c: genai.Client) -> tuple[str, bool | None]:
         r = c.models.generate_content(
             model=FETCH_DESCRIPTION_MODEL,
             contents=types.Part.from_text(text=prompt),
@@ -198,11 +204,17 @@ def fetch_description(
         text = (r.text or "").strip()
         if not text:
             print("      ⚠ Gemma returned empty response (safety filter / refusal)")
-            return ""
+            return "", None
         if len(text) < 100:
             print(f"      ⚠ Gemma: response too short ({len(text)} chars)")
-            return ""
-        return text
+            return "", None
+        visa_ok: bool | None = None
+        m = re.search(r'\nVISA:\s*(SPONSORED|NOT_SPONSORED|UNKNOWN)\s*$', text, re.IGNORECASE)
+        if m:
+            label = m.group(1).upper()
+            visa_ok = True if label == "SPONSORED" else (False if label == "NOT_SPONSORED" else None)
+            text = text[:m.start()].strip()
+        return text, visa_ok
 
     clients_to_try = [c for c in [client, backup_client] if c]
 
@@ -237,7 +249,7 @@ def fetch_description(
                     pass
 
             print(f"      ⚠ fetch_description failed ({exc_type}): {err[:120]}")
-    return ""
+    return "", None
 
 
 # ── Batch scoring ──────────────────────────────────────────────────────────────
@@ -271,7 +283,7 @@ def batch_score(
             if not desc or desc.lower() in ("nan", "none"):
                 print(f"    [Job {i+1}] fetching description: {job.get('title','')[:40]} @ {job.get('company','')[:20]}")
                 time.sleep(5)
-                fetched = fetch_description(
+                fetched, visa_ok = fetch_description(
                     client,
                     title         = str(job.get("title",    "")),
                     company       = str(job.get("company",  "")),
@@ -282,6 +294,7 @@ def batch_score(
                 job["description"]    = fetched
                 job["_was_no_desc"]   = True
                 job["_fetched_chars"] = len(fetched)
+                job["_visa_ok"]       = visa_ok
                 if fetched:
                     print(f"      → {len(fetched):,} chars")
                 else:
@@ -504,8 +517,16 @@ Schema for each object:
   "fit_score":      <integer 1–10>,
   "strengths":      "<2–3 concrete strengths, pipe-separated>",
   "weaknesses":     "<1–2 honest gaps or concerns, pipe-separated>",
-  "low_confidence": <true|false>
+  "low_confidence": <true|false>,
+  "visa_sponsored": <true|false|null>
 }}
+
+VISA SPONSORSHIP RULE:
+Set "visa_sponsored" to false ONLY when the description contains explicit language
+such as "will not sponsor", "no visa sponsorship", "must be authorized to work in
+the US", or "US citizens and permanent residents only". Set true only if the posting
+explicitly states sponsorship is available. Use null whenever the description is
+silent or ambiguous on the topic — never assume false from silence.
 
 CRITICAL RULE FOR STRENGTHS:
 Only list a strength if the specific skill, tool, project, or result appears
@@ -546,12 +567,14 @@ def _parse_batch_response(text: str, n_jobs: int) -> list[ScoreResult | None]:
             idx = int(item.get("job", 0)) - 1
             if not 0 <= idx < n_jobs:
                 continue
+            vs = item.get("visa_sponsored")
             results[idx] = ScoreResult(
                 fit_score      = max(1, min(10, int(item.get("fit_score", 5)))),
                 best_resume    = str(item.get("best_resume", "QR")),
                 strengths      = str(item.get("strengths",  "")).strip(),
                 weaknesses     = str(item.get("weaknesses", "")).strip(),
                 low_confidence = bool(item.get("low_confidence", False)),
+                visa_sponsored = True if vs is True else (False if vs is False else None),
             )
         except (KeyError, ValueError, TypeError):
             continue
