@@ -140,9 +140,9 @@ def push_job(row: pd.Series, score=None) -> "str | bool":
 
     # Inline scoring fields
     if score is not None:
-        payload["properties"]["Fit Score"]   = {"number": int(score.fit_score)}
-        payload["properties"]["Best Resume"] = {"select": {"name": score.best_resume}}
-        payload["properties"]["AI Notes"]    = {
+        payload["properties"]["Fit Score-Dhrubo"]   = {"number": int(score.fit_score)}
+        payload["properties"]["Best Resume-Dhrubo"] = {"select": {"name": score.best_resume}}
+        payload["properties"]["AI Notes-Dhrubo"]    = {
             "rich_text": [{"text": {"content": _format_ai_notes(score)[:2000]}}]
         }
 

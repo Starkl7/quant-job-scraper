@@ -206,30 +206,37 @@ def fetch_description(
 
     clients_to_try = [c for c in [client, backup_client] if c]
 
+    _RETRYABLE = ("RemoteProtocolError", "ConnectionError", "TimeoutError",
+                  "ReadTimeout", "ConnectTimeout", "ProtocolError")
+
     for attempt, c in enumerate(clients_to_try):
         try:
             return _call(c)
         except Exception as exc:
-            err = str(exc)
+            err      = str(exc)
+            exc_type = type(exc).__name__
             is_rate_limit = "429" in err or "RESOURCE_EXHAUSTED" in err
-            is_last = attempt == len(clients_to_try) - 1
+            is_network    = any(t in exc_type for t in _RETRYABLE) or any(t in err for t in _RETRYABLE)
+            is_last       = attempt == len(clients_to_try) - 1
 
-            # Always try the backup key if primary fails for any reason
+            # Try backup key on any primary failure
             if not is_last:
-                reason = "429 rate limit" if is_rate_limit else type(exc).__name__
+                reason = "429 rate limit" if is_rate_limit else exc_type
                 print(f"      ↺ Gemma primary failed ({reason}) — switching to backup key…")
                 continue
 
-            # On last client: one more attempt after a wait if rate-limited
-            if is_rate_limit:
-                print("      ↺ 429 on all Gemma keys — waiting 10s then retrying…")
-                time.sleep(10)
+            # On last client: retry after sleep for transient errors
+            if is_rate_limit or is_network:
+                wait = 10 if is_rate_limit else 5
+                label = "429" if is_rate_limit else "network error"
+                print(f"      ↺ {label} on all Gemma keys — waiting {wait}s then retrying…")
+                time.sleep(wait)
                 try:
                     return _call(c)
                 except Exception:
                     pass
 
-            print(f"      ⚠ fetch_description failed ({type(exc).__name__}): {str(exc)[:120]}")
+            print(f"      ⚠ fetch_description failed ({exc_type}): {err[:120]}")
     return ""
 
 
