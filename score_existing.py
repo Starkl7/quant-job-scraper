@@ -1,10 +1,10 @@
 """
-score_existing.py — Back-fill Fit Score / Best Resume / AI Notes for all existing
+score_existing.py — Back-fill Fit Score-Dhrubo / Best Resume-Dhrubo / AI Notes-Dhrubo for all existing
 Notion listings that have not yet been scored.
 
 NOT FOR GITHUB ACTIONS — run locally only. Runtime: 10–55 min depending on mode.
 
-Fetches every page where Fit Score is empty, scores them in batches of 10 using
+Fetches every page where Fit Score-Dhrubo is empty, scores them in batches of 10 using
 the same Gemini pipeline as the live scrapers, then PATCHes each page in place.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -16,7 +16,7 @@ MODES  (toggle FETCH_MISSING_DESCRIPTIONS below)
 
   False — Score on whatever description is already in Notion.
            Fast: ~8–12 min for 458 jobs.  No-description jobs get
-           low_confidence=True and a note in AI Notes.
+           low_confidence=True and a note in AI Notes-Dhrubo.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Run: python score_existing.py
@@ -74,7 +74,7 @@ def fetch_all_unscored() -> list[dict]:
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload: dict = {
         "page_size": 100,
-        "filter": {"property": "Fit Score", "number": {"is_empty": True}},
+        "filter": {"property": "Fit Score-Dhrubo", "number": {"is_empty": True}},
     }
     jobs: list[dict] = []
 
@@ -121,9 +121,9 @@ def patch_score(page_id: str, score: ScoreResult, description: str = "") -> bool
 
     payload: dict = {
         "properties": {
-            "Fit Score":   {"number": int(score.fit_score)},
-            "Best Resume": {"select": {"name": score.best_resume}},
-            "AI Notes":    {"rich_text": [{"text": {"content": ai_notes[:2000]}}]},
+            "Fit Score-Dhrubo":   {"number": int(score.fit_score)},
+            "Best Resume-Dhrubo": {"select": {"name": score.best_resume}},
+            "AI Notes-Dhrubo":    {"rich_text": [{"text": {"content": ai_notes[:2000]}}]},
         }
     }
     if description:
@@ -163,7 +163,7 @@ def main() -> None:
     ts   = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     print(f"\n{'='*64}")
-    print(f"score_existing.py — backfill Fit Scores   {ts}")
+    print(f"score_existing.py — backfill Fit Scores-Dhrubo   {ts}")
     print(f"Mode: {mode}")
     print(f"{'='*64}\n")
 
