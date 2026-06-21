@@ -407,23 +407,28 @@ CANDIDATE: Dhrubojeet Haldar
   • 2 years production experience at Wells Fargo: quantitative model validation
     on $48B consumer credit card portfolio (PSI, KS, ROC, SR 11-7 compliance,
     model governance reporting)
-  • ES futures calendar spread mean-reversion strategy: Databento MBP-10
-    nanosecond order book, OOS Sharpe +3.88, p=0.0265 (n=670)
-  • G10 FX statistical arbitrage: Kalman filter dynamic hedge ratio, 14 pairs,
-    OOS Sharpe 0.53 (6H) across 2016-2022 out-of-sample window
-  • Skills: Python, C/C++, SAS, SQL, R; QuantLib, Vollib, Statsmodels;
-    stochastic calculus, Monte Carlo, time series analysis, numerical optimisation
-  • Bloomberg Terminal, Databento (MBP-10 order book data)
+  • Avellaneda-Stoikov market-maker (C++20) on BTCUSD perpetual: MLE-calibrated
+    fill intensity, 105 walk-forward windows, real-tape fill replay; vol-adaptive
+    horizon cut losses 58%, max drawdown 47% vs fixed-horizon baseline
+  • Russell 2000 deep momentum: XGBoost 4-quadrant L/S reclassifier (10-member
+    ensemble, 147 rebalances); Sharpe 0.235 vs 0.126 baseline; primary alpha
+    GL quadrant +1.90%/mo orthogonal to momentum factor
+  • ES futures calendar spread mean-reversion: Databento MBP-10 nanosecond order
+    book; European session significant alpha source (n=170, p=0.0008, +$4.9/trade);
+    OOS Sharpe +3.88, p=0.0265 (n=670), net of $8.04/lot costs
+  • Skills: Python, C++20, SAS, SQL, R; QuantLib, Vollib, Statsmodels, XGBoost,
+    NLOpt; stochastic calculus, Monte Carlo, time series, numerical optimisation
+  • Bloomberg Terminal, Databento (MBP-10), QuantConnect
 
 The candidate has four tailored resumes:
-  QT   — Quantitative Trading  (vol surfaces, stochastic vol, ES microstructure,
-          systematic FX/equities strategies, execution systems)
-  QR   — Quantitative Research (signal design, stat arb, Kalman, production
-          quant modelling at Wells Fargo, macro research)
-  QA   — Quantitative Analytics (credit portfolio analytics, model performance
-          diagnostics, regime-conditional drift, ROC/KS/PSI)
-  Risk — Model Risk / Model Validation (SR 11-7, model governance, model
-          validation, stochastic calculus, derivatives pricing, Monte Carlo)
+  QT   — Quantitative Trading  (C++20 market-making (Avellaneda-Stoikov), systematic
+          L/S equities (XGBoost), ES futures microstructure, inventory-aware execution)
+  QR   — Quantitative Research (microstructure signal design, hypothesis-driven alpha
+          research, ML-enhanced systematic strategies, production quant modelling)
+  QA   — Quantitative Analytics (credit portfolio analytics, regime-conditional model
+          diagnostics (ROC/KS/PSI), OOS statistical validation, bias-controlled backtesting)
+  Risk — Model Risk / Model Validation (SR 11-7 compliance, scorecard model validation,
+          score instability analysis, production model governance, drift detection)
 
 EVALUATION RULES:
 1. Read the job description and understand what it actually requires.
