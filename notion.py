@@ -18,7 +18,7 @@ HEADERS = {
     "Notion-Version": NOTION_API_VERSION,
 }
 
-_MAX_PUSH_RETRIES = 2   # push_job retries on transient Notion errors
+_MAX_PUSH_RETRIES = 2   # retries on transient Notion errors (push, update, query)
 
 
 # ── Startup validation ─────────────────────────────────────────────────────────
@@ -51,35 +51,70 @@ def validate_db() -> None:
 
 # ── Read ───────────────────────────────────────────────────────────────────────
 
-def get_existing_keys() -> set[str]:
+def _query_database() -> list[dict]:
     """
-    Query Notion for all existing entries and return their dedup keys.
-    Paginates automatically. Used to prevent cross-run duplicates.
+    Page through the entire database, retrying transient failures per page.
+    Returns the raw list of Notion page objects.
     """
     url     = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload = {"page_size": 100}
-    keys: set[str] = set()
+    pages: list[dict] = []
 
     while True:
-        resp = requests.post(url, headers=HEADERS, json=payload, timeout=30)
-        if resp.status_code != 200:
+        for attempt in range(_MAX_PUSH_RETRIES + 1):
+            resp = requests.post(url, headers=HEADERS, json=payload, timeout=30)
+            if resp.status_code == 200:
+                break
+            if attempt < _MAX_PUSH_RETRIES:
+                print(f"    ⚠ Notion query attempt {attempt+1} failed ({resp.status_code}) — retrying in 3s…")
+                time.sleep(3)
+        else:
             raise RuntimeError(
-                f"Notion query failed ({resp.status_code}): {resp.text[:300]}"
+                f"Notion query failed ({resp.status_code}) after {_MAX_PUSH_RETRIES+1} attempts: {resp.text[:300]}"
             )
         data = resp.json()
-        for page in data.get("results", []):
-            props    = page.get("properties", {})
-            role     = _title_text(props.get("Role",     {}))
-            company  = _rich_text(props.get("Company",   {}))
-            location = _rich_text(props.get("Location",  {}))
-            if role:
-                from filters import make_dedup_key
-                keys.add(make_dedup_key(role, company, location))
+        pages.extend(data.get("results", []))
         if not data.get("has_more"):
             break
         payload["start_cursor"] = data["next_cursor"]
 
+    return pages
+
+
+def get_existing_keys() -> set[str]:
+    """
+    Query Notion for all existing entries and return their dedup keys.
+    Used to prevent cross-run duplicates.
+    """
+    from filters import make_dedup_key
+
+    keys: set[str] = set()
+    for page in _query_database():
+        props    = page.get("properties", {})
+        role     = _title_text(props.get("Role",     {}))
+        company  = _rich_text(props.get("Company",   {}))
+        location = _rich_text(props.get("Location",  {}))
+        if role:
+            keys.add(make_dedup_key(role, company, location))
     return keys
+
+
+def get_scored_jobs() -> list[dict]:
+    """
+    Return every page with both fit-score columns plus role/company for display.
+    Each item: page_id, role, company, fit_dhrubo, fit_shreyansh (None if unscored).
+    """
+    jobs = []
+    for page in _query_database():
+        props = page.get("properties", {})
+        jobs.append({
+            "page_id":       page["id"],
+            "role":          _title_text(props.get("Role",     {})),
+            "company":       _rich_text(props.get("Company",   {})),
+            "fit_dhrubo":    _number(props.get("Fit Score-Dhrubo",    {})),
+            "fit_shreyansh": _number(props.get("Fit Score-Shreyansh", {})),
+        })
+    return jobs
 
 
 # ── Write — create new page ────────────────────────────────────────────────────
@@ -201,6 +236,27 @@ def update_job_score(page_id: str, score, description: str = "") -> bool:
     return False
 
 
+def archive_page(page_id: str) -> bool:
+    """
+    Archive a Notion page (soft-delete — recoverable from Notion's Trash for ~30 days).
+    """
+    payload = {"archived": True}
+    for attempt in range(_MAX_PUSH_RETRIES + 1):
+        resp = requests.patch(
+            f"https://api.notion.com/v1/pages/{page_id}",
+            headers=HEADERS,
+            json=payload,
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return True
+        if attempt < _MAX_PUSH_RETRIES:
+            time.sleep(3)
+
+    print(f"    ✗ archive_page failed ({resp.status_code}): {resp.text[:120]}")
+    return False
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _rich_text(prop: dict) -> str:
@@ -209,6 +265,10 @@ def _rich_text(prop: dict) -> str:
 
 def _title_text(prop: dict) -> str:
     return "".join(t.get("plain_text", "") for t in prop.get("title", []))
+
+
+def _number(prop: dict) -> "float | None":
+    return prop.get("number")
 
 
 def _salary_str(row: pd.Series) -> str:

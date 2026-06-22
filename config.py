@@ -48,6 +48,7 @@ SOURCE_MAP = {
     "linkedin": "LinkedIn",
     "indeed":   "Indeed",
     "google":   "Google Jobs",
+    "ats":      "ATS",
 }
 
 # ── JobSpy search terms (LinkedIn + Indeed) ────────────────────────────────────
