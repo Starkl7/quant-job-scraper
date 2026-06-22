@@ -53,6 +53,45 @@ COMPANIES: list[dict] = [
     {"name": "NK Securities",           "ats": "greenhouse", "slug": "nksecuritiesresearch"},
     {"name": "Quantbox Research",       "ats": "greenhouse", "slug": "quantboxresearchpte"},
 
+    # ── Quant Hedge Funds & Pod Shops ────────────────────────────────────────
+    # Added Jun 2026 after vetting ~50 new firms; confirmed via live API tests.
+
+    # Point72 — Academy internship programs (SG/HK/JP 2027); 2026 tech intern
+    {"name": "Point72",                "ats": "greenhouse", "slug": "point72"},
+
+    # QRT (Qube Research & Technologies) — 2026 Graduate + QR/Trading internships
+    {"name": "Qube Research & Technologies", "ats": "greenhouse", "slug": "quberesearchandtechnologies"},
+
+    # Schonfeld — 2026 BSc/MSc/PhD Quantitative Researcher Internship
+    {"name": "Schonfeld",              "ats": "greenhouse", "slug": "schonfeld"},
+
+    # Man Group — 2026 Technology Graduate Programme; QD/QR interns
+    {"name": "Man Group",              "ats": "greenhouse", "slug": "mangroup"},
+
+    # WorldQuant — Entry-Level Quantitative Strategist (Paris); Junior QA (Austin)
+    {"name": "WorldQuant",             "ats": "greenhouse", "slug": "worldquant"},
+
+    # AQR Capital — 2027 Summer Analyst programs: Research, Engineering, Risk
+    {"name": "AQR Capital",            "ats": "greenhouse", "slug": "aqr"},
+
+    # Squarepoint Capital — Graduate Quant Developer; Intern Software Dev Fall 2026
+    {"name": "Squarepoint Capital",    "ats": "greenhouse", "slug": "squarepointcapital"},
+
+    # Aquatic Capital — explicitly labels "Early Career" for QR and SWE; Intern QR Summer 2027
+    {"name": "Aquatic Capital",        "ats": "greenhouse", "slug": "aquaticcapitalmanagement"},
+
+    # Verition — quant-focused board; no grad program currently but worth monitoring
+    {"name": "Verition",               "ats": "greenhouse", "slug": "veritiongroupllc"},
+
+    # Acadian Asset Management — systematic quant; no grad listings currently
+    {"name": "Acadian Asset Management", "ats": "greenhouse", "slug": "acadianassetmanagementllc"},
+
+    # Graham Capital Management — systematic macro/quant; historically posts summer internships
+    {"name": "Graham Capital Management", "ats": "greenhouse", "slug": "grahamcapitalmanagement"},
+
+    # PDT Partners — quant HFT spinoff from Morgan Stanley; no early career currently
+    {"name": "PDT Partners",           "ats": "greenhouse", "slug": "pdtpartners"},
+
     # ── Lever ─────────────────────────────────────────────────────────────────
     # Endpoint: https://api.lever.co/v0/postings/{slug}?mode=json
 
