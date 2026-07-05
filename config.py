@@ -56,14 +56,16 @@ SOURCE_MAP = {
 
 RESEARCHER_TERM = (
     '("quantitative researcher" OR "quant researcher" OR "quantitative analyst" '
-    'OR "quant analyst" OR "quantitative strategist" OR "quant strategist") -developer'
+    'OR "quant analyst" OR "quantitative strategist" OR "quant strategist") '
+    '-developer -intern -internship'
 )
 TRADER_TERM = (
-    '("quantitative trader" OR "quant trader" OR "algorithmic trader" OR "algo trader")'
+    '("quantitative trader" OR "quant trader" OR "algorithmic trader" OR "algo trader") '
+    '-intern -internship'
 )
 RISK_TERM = (
     '("quantitative risk analyst" OR "quant risk analyst" OR "risk quant" '
-    'OR "market risk quant" OR "quant risk") -developer'
+    'OR "market risk quant" OR "quant risk") -developer -intern -internship'
 )
 # ── SerpAPI search terms (Google Jobs) ────────────────────────────────────────
 # Simple OR chains — complex parenthesised boolean causes zero-result errors

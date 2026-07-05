@@ -21,6 +21,20 @@ _SENIOR_RE = re.compile(
     "|".join(SENIOR_TITLE_PATTERNS), flags=re.IGNORECASE
 )
 
+# ── Internship exclusion ──────────────────────────────────────────────────────
+# Hard-exclude internships/co-ops regardless of any grad-year signal in the
+# title or description — grad-year phrasing ("class of 2026", "graduating
+# 2026") appears on internship postings too, so this check must run before
+# the grad-signal check, not rely on it.
+
+INTERN_PATTERNS: list[str] = [
+    r"\bintern\b", r"\binterns\b", "internship", r"\bco-?op\b",
+    "summer analyst", "summer associate",
+]
+_INTERN_RE = re.compile(
+    "|".join(INTERN_PATTERNS), flags=re.IGNORECASE
+)
+
 # ── Early-career / grad-year signals ─────────────────────────────────────────
 
 GRAD_SIGNALS: list[str] = [
@@ -50,6 +64,8 @@ _QUANT_TITLE_RE = re.compile(
 # ── Company blocklist ─────────────────────────────────────────────────────────
 # Annotation / gig platforms that post quant-sounding titles for labelling work.
 # Recruitment agencies are NOT blocked — they post real finance roles.
+# Prop trading firms that require the trader to fund/risk their own capital
+# (not W-2 employment) are also blocked — e.g. T3 Trading.
 
 COMPANY_BLOCKLIST: frozenset[str] = frozenset({
     "dataannotation",
@@ -59,6 +75,8 @@ COMPANY_BLOCKLIST: frozenset[str] = frozenset({
     "remotasks",
     "telus international",
     "lionbridge",
+    "t3 trading",
+    "mysmartpros",
 })
 
 # ── Experience extraction ─────────────────────────────────────────────────────
@@ -124,6 +142,10 @@ def filter_reason(row: pd.Series) -> tuple[bool, str]:
     senior_hit = _SENIOR_RE.search(title)
     if senior_hit:
         return False, f"EXCLUDED — senior signal in title: '{senior_hit.group()}'"
+
+    intern_hit = _INTERN_RE.search(title)
+    if intern_hit:
+        return False, f"EXCLUDED — internship signal in title: '{intern_hit.group()}'"
 
     grad_in_title = _GRAD_RE.search(title)
     if grad_in_title:
