@@ -99,7 +99,8 @@ _EXP_EXTRACT_RE = re.compile(
 _LOCATION_SUFFIX_RE = re.compile(
     r'\s*\(\+\d+\s+others?\)\s*$'           # (+5 others)
     r'|,\s*(?:usa|united states|u\.s\.a?\.)$'  # , USA  / , United States
-    r'|,\s*(?:uk|united kingdom|u\.k\.)\s*$',  # , UK   / , United Kingdom
+    r'|,\s*(?:uk|united kingdom|u\.k\.)\s*$'   # , UK   / , United Kingdom
+    r'|,\s*hong kong sar\s*$',                 # , Hong Kong SAR
     re.IGNORECASE,
 )
 
@@ -109,8 +110,20 @@ def _norm(text: str) -> str:
     return _LOCATION_SUFFIX_RE.sub('', text).strip()
 
 
+# Strips trailing legal-entity suffixes so cross-source dedup keys match
+# regardless of whether a source appends one, e.g. "DV Trading" vs "DV Trading LLC".
+_COMPANY_SUFFIX_RE = re.compile(
+    r',?\s*\b(llc|inc|incorporated|corp|corporation|ltd|limited|llp|lp|plc|co)\.?\s*$',
+    re.IGNORECASE,
+)
+
+
+def _norm_company(text: str) -> str:
+    return _COMPANY_SUFFIX_RE.sub('', _norm(text)).strip()
+
+
 def make_dedup_key(role: str, company: str, location: str) -> str:
-    return f"{_norm(role)}|{_norm(company)}|{_norm(location)}"
+    return f"{_norm(role)}|{_norm_company(company)}|{_norm(location)}"
 
 
 def extract_exp_req(desc: str) -> str:
@@ -188,7 +201,7 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
 
     # Secondary dedup: same title + company across different locations (keep first)
     df["_tc_key"] = df.apply(
-        lambda r: f"{_norm(str(r.get('title', '')))}|{_norm(str(r.get('company', '')))}",
+        lambda r: f"{_norm(str(r.get('title', '')))}|{_norm_company(str(r.get('company', '')))}",
         axis=1,
     )
     df = df.drop_duplicates(subset=["_tc_key"])

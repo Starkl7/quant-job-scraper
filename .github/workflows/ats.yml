@@ -5,6 +5,10 @@ on:
     - cron: '0 */12 * * *'  # every 12 hours — twice daily direct ATS polling
   workflow_dispatch:          # manual trigger from GitHub UI
 
+concurrency:
+  group: scrape-ats
+  cancel-in-progress: false
+
 jobs:
   scrape-ats:
     runs-on: ubuntu-latest

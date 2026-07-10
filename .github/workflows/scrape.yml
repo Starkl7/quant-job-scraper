@@ -5,6 +5,10 @@ on:
     - cron: '0 6 * * *'     # 06:00 UTC daily (02:00 ET / 11:00 IST)
   workflow_dispatch:          # manual trigger from GitHub UI
 
+concurrency:
+  group: scrape-jobspy
+  cancel-in-progress: false
+
 jobs:
   scrape-jobspy:
     runs-on: ubuntu-latest

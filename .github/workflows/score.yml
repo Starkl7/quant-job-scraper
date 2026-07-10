@@ -5,6 +5,10 @@ on:
     - cron: '0 23 * * *'    # 23:00 UTC daily — captures the full day's listings
   workflow_dispatch:          # manual trigger from GitHub UI
 
+concurrency:
+  group: scrape-serpapi
+  cancel-in-progress: false
+
 jobs:
   scrape-serpapi:
     runs-on: ubuntu-latest
