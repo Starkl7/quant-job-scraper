@@ -408,14 +408,15 @@ CANDIDATE: Dhrubojeet Haldar
     on $48B consumer credit card portfolio (PSI, KS, ROC, SR 11-7 compliance,
     model governance reporting)
   • Avellaneda-Stoikov market-maker (C++20) on BTCUSD perpetual: MLE-calibrated
-    fill intensity, 105 walk-forward windows, real-tape fill replay; vol-adaptive
-    horizon cut losses 58%, max drawdown 47% vs fixed-horizon baseline
+    fill intensity, 185 walk-forward windows, real-tape fill replay; vol-adaptive
+    horizon cut extreme-volatility window losses 87%; net PnL +$38.04 (46k fills),
+    Sharpe 1.84, 69.7% profitable windows
   • Russell 2000 deep momentum: XGBoost 4-quadrant L/S reclassifier (10-member
-    ensemble, 147 rebalances); Sharpe 0.235 vs 0.126 baseline; primary alpha
-    GL quadrant +1.90%/mo orthogonal to momentum factor
+    ensemble, 159 rebalances, 2012-2025); Sharpe 0.143 vs 0.046 baseline; primary
+    alpha GL quadrant +1.67%/mo orthogonal to momentum factor
   • ES futures calendar spread mean-reversion: Databento MBP-10 nanosecond order
-    book; European session significant alpha source (n=170, p=0.0008, +$4.9/trade);
-    OOS Sharpe +3.88, p=0.0265 (n=670), net of $8.04/lot costs
+    book; European session significant alpha source (n=90, p=0.013, +$3.9/trade);
+    OOS Sharpe +3.88, p=0.006 (n=299), net of $8.04/lot costs
   • Skills: Python, C++20, SAS, SQL, R; QuantLib, Vollib, Statsmodels, XGBoost,
     NLOpt; stochastic calculus, Monte Carlo, time series, numerical optimisation
   • Bloomberg Terminal, Databento (MBP-10), QuantConnect
