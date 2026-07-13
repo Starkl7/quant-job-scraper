@@ -122,8 +122,32 @@ def _norm_company(text: str) -> str:
     return _COMPANY_SUFFIX_RE.sub('', _norm(text)).strip()
 
 
+def _norm_location(text: str) -> str:
+    """
+    Reduce a location string to its first city so cross-source keys match
+    regardless of state/province/country formatting:
+
+      "New York, United States"                    → "new york"
+      "new york, ny"                               → "new york"
+      "Amsterdam, North Holland, Netherlands"      → "amsterdam"
+      "Chicago, United States; New York, United States" → "chicago"
+      "chicago; new york"                          → "chicago"
+      "Singapore, Singapore"                       → "singapore"
+
+    Multi-city listings collapse to their first city — acceptable for dedup:
+    sources list the same posting with different city orderings rarely, and
+    over-merging two same-title/same-company roles in different cities is
+    rarer still (distinct cities remain distinct keys).
+    """
+    text = _norm(text)
+    # First segment of a multi-city list ("chicago; new york", "Chicago/Miami/NYC")
+    text = re.split(r'[;/|]', text, maxsplit=1)[0]
+    # City is the part before the first comma; the rest is state/province/country
+    return text.split(',', 1)[0].strip()
+
+
 def make_dedup_key(role: str, company: str, location: str) -> str:
-    return f"{_norm(role)}|{_norm_company(company)}|{_norm(location)}"
+    return f"{_norm(role)}|{_norm_company(company)}|{_norm_location(location)}"
 
 
 def extract_exp_req(desc: str) -> str:
