@@ -2,7 +2,7 @@ name: Scrape LinkedIn + Indeed (JobSpy)
 
 on:
   schedule:
-    - cron: '0 6 * * *'     # 06:00 UTC daily (02:00 ET / 11:00 IST)
+    - cron: '0 23 * * *'    # 23:00 UTC daily (7:00 PM EDT / 6:00 PM EST)
   workflow_dispatch:          # manual trigger from GitHub UI
 
 concurrency:

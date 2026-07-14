@@ -2,7 +2,7 @@ name: Scrape Google Jobs (SerpAPI)
 
 on:
   schedule:
-    - cron: '0 23 * * *'    # 23:00 UTC daily — captures the full day's listings
+    - cron: '0 2 * * *'     # 02:00 UTC daily (10:00 PM EDT) — captures the full day's listings
   workflow_dispatch:          # manual trigger from GitHub UI
 
 concurrency:

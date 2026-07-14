@@ -2,7 +2,7 @@ name: Scrape Direct ATS Endpoints
 
 on:
   schedule:
-    - cron: '0 */12 * * *'  # every 12 hours — twice daily direct ATS polling
+    - cron: '0 4,16 * * *'  # 04:00 and 16:00 UTC (12:00 AM / 12:00 PM EDT) — twice daily direct ATS polling
   workflow_dispatch:          # manual trigger from GitHub UI
 
 concurrency:
