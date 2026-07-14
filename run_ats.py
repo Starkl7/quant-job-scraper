@@ -27,7 +27,7 @@ from config import (
     NOTION_TOKEN, NOTION_DB_ID, GEMINI_API_KEY,
     SCORING_BATCH_SIZE,
 )
-from filters import apply_filters
+from filters import apply_filters, is_known_job, make_index_keys
 from notify import send_slack
 from scoring import (
     init_clients, load_resumes, batch_score,
@@ -199,7 +199,7 @@ def main() -> None:
     # ── Phase 1: Fetch, filter, dedup ─────────────────────────────────────────
     print("1/3  Fetching existing Notion keys for dedup…")
     existing_keys = notion.get_existing_keys()
-    print(f"     {len(existing_keys)} existing entries\n")
+    print(f"     {len(existing_keys)} existing dedup keys\n")
 
     print("2/3  Fetching from ATS endpoints…")
     raw_df = fetch_all()
@@ -221,7 +221,11 @@ def main() -> None:
         send_slack(msg)
         return
 
-    net_new = filtered_df[~filtered_df["_dedup_key"].isin(existing_keys)]
+    net_new = filtered_df[~filtered_df.apply(
+        lambda r: is_known_job(str(r.get("title", "")), str(r.get("company", "")),
+                               str(r.get("location", "")), existing_keys),
+        axis=1,
+    )]
     skipped = len(filtered_df) - len(net_new)
     print(f"     {len(net_new)} net-new (skipped {skipped} already in Notion)\n")
 
@@ -256,7 +260,9 @@ def main() -> None:
             page_id = notion.push_job(job, score)
             if page_id:
                 added += 1
-                existing_keys.add(job["_dedup_key"])
+                existing_keys.update(make_index_keys(
+                    str(job.get("title", "")), str(job.get("company", "")),
+                    str(job.get("location", ""))))
                 print(f"    ✓ {job.get('title','')[:40]} @ {job.get('company','')[:20]}")
                 if (score and score.low_confidence
                         and job.get("_was_no_desc") and not job.get("_fetched_chars")):

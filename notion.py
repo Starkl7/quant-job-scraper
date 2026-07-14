@@ -83,10 +83,11 @@ def _query_database() -> list[dict]:
 
 def get_existing_keys() -> set[str]:
     """
-    Query Notion for all existing entries and return their dedup keys.
-    Used to prevent cross-run duplicates.
+    Query Notion for all existing entries and return their dedup-index keys
+    (one per city, plus presence/wildcard markers — see filters.make_index_keys).
+    Used with filters.is_known_job() to prevent cross-run duplicates.
     """
-    from filters import make_dedup_key
+    from filters import make_index_keys
 
     keys: set[str] = set()
     for page in _query_database():
@@ -95,7 +96,7 @@ def get_existing_keys() -> set[str]:
         company  = _rich_text(props.get("Company",   {}))
         location = _rich_text(props.get("Location",  {}))
         if role:
-            keys.add(make_dedup_key(role, company, location))
+            keys.update(make_index_keys(role, company, location))
     return keys
 
 

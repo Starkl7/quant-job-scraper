@@ -118,36 +118,121 @@ _COMPANY_SUFFIX_RE = re.compile(
 )
 
 
+# Known brand-name variants across sources (ATS posts the legal name, Google
+# Jobs/LinkedIn the brand). Keys and values are post-suffix-strip normalized
+# forms; every variant maps to one canonical spelling. Hand-curated only — no
+# fuzzy/prefix matching, because near-identical names can be distinct firms
+# (e.g. Citadel vs Citadel Securities, deliberately NOT aliased).
+COMPANY_ALIASES: dict[str, str] = {
+    "old mission capital": "old mission",
+    "aquatic capital management": "aquatic capital",
+    "da vinci trading": "da vinci",
+    "imc": "imc trading",
+    "imc financial markets": "imc trading",
+    "epam systems": "epam",
+    "vanguard careers": "vanguard",
+    "synchrony financial": "synchrony",
+    "regions financial": "regions",
+    "clearwater analytics (cwan)": "clearwater analytics",
+    "innova solutions": "innova",
+    "td securities": "td",
+}
+
+
 def _norm_company(text: str) -> str:
-    return _COMPANY_SUFFIX_RE.sub('', _norm(text)).strip()
+    name = _COMPANY_SUFFIX_RE.sub('', _norm(text)).strip()
+    return COMPANY_ALIASES.get(name, name)
+
+
+# Location strings that carry no real place information. A job whose location
+# reduces to one of these is treated as "location unknown" for cross-run dedup.
+# Country/state names are deliberately NOT here: "United States" is kept as a
+# distinct location so a genuinely new US posting is never swallowed by an
+# existing posting elsewhere (e.g. a Sydney-only firm opening a US role).
+WILDCARD_LOCATIONS: frozenset[str] = frozenset({
+    "", "anywhere", "remote", "worldwide", "global", "flexible",
+})
+
+
+def _split_locations(text: str) -> list[str]:
+    """
+    Split a possibly multi-city location string into normalized city names:
+
+      "New York, United States"                → ["new york"]
+      "Chicago, IL or New York, NY"            → ["chicago", "new york"]
+      "chicago; new york"                      → ["chicago", "new york"]
+      "Greater Toronto Area, Canada"           → ["toronto"]
+      "London Area, United Kingdom"            → ["london"]
+      "Anywhere"                               → [] (wildcard, no real city)
+
+    Each city is the part of its segment before the first comma; the rest is
+    state/province/country. Wildcard segments (see WILDCARD_LOCATIONS) are
+    dropped, so an all-wildcard location returns [].
+    """
+    text = _norm(text)
+    cities: list[str] = []
+    # Multi-city separators: "chicago; new york", "Chicago/Miami", "A or B", "A and B".
+    # \bor\b also matches a trailing ", OR" state abbreviation — harmless, since
+    # the empty segment it leaves behind is dropped below.
+    for part in re.split(r'[;/|]|\bor\b|\band\b', text):
+        city = part.split(',', 1)[0].strip()
+        city = re.sub(r'^greater\s+', '', city)
+        city = re.sub(r'\s+area$', '', city)
+        if city and city not in WILDCARD_LOCATIONS and city not in cities:
+            cities.append(city)
+    return cities
 
 
 def _norm_location(text: str) -> str:
-    """
-    Reduce a location string to its first city so cross-source keys match
-    regardless of state/province/country formatting:
-
-      "New York, United States"                    → "new york"
-      "new york, ny"                               → "new york"
-      "Amsterdam, North Holland, Netherlands"      → "amsterdam"
-      "Chicago, United States; New York, United States" → "chicago"
-      "chicago; new york"                          → "chicago"
-      "Singapore, Singapore"                       → "singapore"
-
-    Multi-city listings collapse to their first city — acceptable for dedup:
-    sources list the same posting with different city orderings rarely, and
-    over-merging two same-title/same-company roles in different cities is
-    rarer still (distinct cities remain distinct keys).
-    """
-    text = _norm(text)
-    # First segment of a multi-city list ("chicago; new york", "Chicago/Miami/NYC")
-    text = re.split(r'[;/|]', text, maxsplit=1)[0]
-    # City is the part before the first comma; the rest is state/province/country
-    return text.split(',', 1)[0].strip()
+    """First city of the location string, '' if none (see _split_locations)."""
+    cities = _split_locations(text)
+    return cities[0] if cities else ''
 
 
 def make_dedup_key(role: str, company: str, location: str) -> str:
     return f"{_norm(role)}|{_norm_company(company)}|{_norm_location(location)}"
+
+
+# ── Cross-run dedup index ─────────────────────────────────────────────────────
+# A job already in Notion contributes one key per city (a multi-city posting
+# matches an incoming single-city one and vice versa), a "|@" presence marker
+# for its title+company, and a "|*" wildcard key when its location is unknown.
+# An incoming job is a duplicate iff:
+#   - one of its cities collides with a stored city for the same title+company, or
+#   - the stored posting had no real location ("|*"), or
+#   - the incoming job has no real location and the title+company exists at all.
+# Two postings with the same title+company in *different* real cities are NOT
+# duplicates — each city stays a distinct key.
+
+def make_index_keys(role: str, company: str, location: str) -> set[str]:
+    """All dedup-index keys that a stored job contributes."""
+    tc = f"{_norm(role)}|{_norm_company(company)}"
+    cities = _split_locations(location)
+    keys = {f"{tc}|{c}" for c in cities}
+    keys.add(f"{tc}|@")
+    if not cities:
+        keys.add(f"{tc}|*")
+    return keys
+
+
+def match_existing(role: str, company: str, location: str,
+                   index: set[str]) -> str | None:
+    """Return the index key an incoming job collides with, or None if new."""
+    tc = f"{_norm(role)}|{_norm_company(company)}"
+    if f"{tc}|*" in index:
+        return f"{tc}|*"
+    cities = _split_locations(location)
+    if not cities:
+        return f"{tc}|@" if f"{tc}|@" in index else None
+    for c in cities:
+        if f"{tc}|{c}" in index:
+            return f"{tc}|{c}"
+    return None
+
+
+def is_known_job(role: str, company: str, location: str,
+                 index: set[str]) -> bool:
+    return match_existing(role, company, location, index) is not None
 
 
 def extract_exp_req(desc: str) -> str:
