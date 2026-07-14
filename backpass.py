@@ -26,7 +26,7 @@ load_dotenv()
 import notion
 
 DRY_RUN   = True
-THRESHOLD = 4
+THRESHOLD = 6
 
 
 def should_drop(job: dict) -> bool:

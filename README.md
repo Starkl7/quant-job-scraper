@@ -18,14 +18,15 @@ Slack — daily summary (added / failed / re-scored / visa-denied)
 
 ## Pipelines
 
-Two independent orchestrators run on separate schedules:
+Three independent orchestrators run on separate schedules:
 
 | Orchestrator | Source | Schedule (UTC) | Workflow |
 |---|---|---|---|
-| `run_jobspy.py` | LinkedIn + Indeed | 06:00 daily | `scrape.yml` |
-| `run_serpapi.py` | Google Jobs | 23:00 daily | `score.yml` |
+| `run_jobspy.py` | LinkedIn + Indeed | 23:00 daily | `scrape.yml` |
+| `run_serpapi.py` | Google Jobs | 02:00 daily | `score.yml` |
+| `run_ats.py` | Direct company ATS endpoints | 04:00 and 16:00 | `ats.yml` |
 
-Both implement the same 4-phase pipeline:
+All implement the same 4-phase pipeline:
 
 1. **Startup** — validate Notion DB, initialize primary + backup Gemini clients, load resume PDFs, fetch existing Notion dedup keys
 2. **Scrape → filter → dedup** — run queries, apply role/title filters, skip jobs already in Notion
@@ -111,10 +112,12 @@ job-scraper/
 ├── notify.py              # Slack webhook
 ├── scrapers/
 │   ├── jobspy.py          # JobSpy (LinkedIn + Indeed) backend
-│   └── serpapi.py         # SerpAPI (Google Jobs) backend
+│   ├── serpapi.py         # SerpAPI (Google Jobs) backend
+│   └── ats.py             # Direct ATS endpoints (Greenhouse, Lever, …)
 └── .github/workflows/
     ├── scrape.yml         # JobSpy daily run
-    └── score.yml          # SerpAPI daily run
+    ├── score.yml          # SerpAPI daily run
+    └── ats.yml            # ATS 12-hourly run
 ```
 
 ## Setup
@@ -152,6 +155,9 @@ python run_jobspy.py
 
 # Google Jobs
 python run_serpapi.py
+
+# Direct company ATS endpoints
+python run_ats.py
 
 # Re-score existing Notion entries (backfill, no visa filter)
 python score_existing.py
