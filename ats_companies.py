@@ -114,4 +114,32 @@ COMPANIES: list[dict] = [
     # Endpoint: POST https://apply.workable.com/api/v3/accounts/{slug}/jobs
 
     {"name": "Eagle Seven", "ats": "workable", "slug": "eagle-seven"},
+
+    # ── Workday ───────────────────────────────────────────────────────────────
+    # Endpoint: POST {tenant}.{wd}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs
+    # Big banks that post 2027 new-grad / full-time analyst programs. All seven
+    # endpoints live-verified Jul 2026. Descriptions aren't in the list API —
+    # scoring's fetch_description backfills them. To add a Workday company:
+    # open its careers search page, read the /wday/cxs/… request, and copy the
+    # tenant, data-center (wdN), and site tokens here.
+
+    {"name": "Citi",             "ats": "workday", "tenant": "citi",          "wd": "wd5", "site": "2"},
+    {"name": "Morgan Stanley",   "ats": "workday", "tenant": "ms",            "wd": "wd5", "site": "External"},
+    {"name": "Barclays",         "ats": "workday", "tenant": "barclays",      "wd": "wd3", "site": "External_Career_Site_Barclays"},
+    {"name": "Deutsche Bank",    "ats": "workday", "tenant": "db",            "wd": "wd3", "site": "DBWebsite"},
+    {"name": "TD Bank",          "ats": "workday", "tenant": "td",            "wd": "wd3", "site": "TD_Bank_Careers"},
+    {"name": "State Street",     "ats": "workday", "tenant": "statestreet",   "wd": "wd1", "site": "Global"},
+    {"name": "Northern Trust",   "ats": "workday", "tenant": "ntrs",          "wd": "wd1", "site": "northerntrust"},
+
+    # ── Oracle Cloud Recruiting ────────────────────────────────────────────────
+    # Endpoint: GET {host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions
+    # Live-verified Jul 2026. Descriptions backfilled by scoring.
+
+    {"name": "JPMorgan Chase", "ats": "oracle", "host": "jpmc.fa.oraclecloud.com", "site": "CX_1001"},
+
+    # ── Radancy (TalentBrew) ───────────────────────────────────────────────────
+    # Endpoint: GET {url}/search-jobs/results (JSON envelope, HTML fragment inside)
+    # Feed is NOT date-sorted — adapter pages the whole board and keeps recent.
+
+    {"name": "Capital One", "ats": "radancy", "url": "https://www.capitalonecareers.com"},
 ]

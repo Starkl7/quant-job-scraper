@@ -61,6 +61,20 @@ _QUANT_TITLE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+# New-grad program titles that carry no quant keyword — bank/consulting 2027
+# programs like "2027 Markets Full-Time Analyst Program" or "Strategy
+# Consulting Associate - 2027". A year near analyst/associate/graduate, or an
+# explicit program/new-grad phrase, passes the gate; Gemini scoring downstream
+# handles relevance.
+
+_PROGRAM_TITLE_RE = re.compile(
+    r'\b20\d{2}\b.{0,40}\b(?:analyst|associate|graduate|program)\b'
+    r'|\b(?:analyst|associate|graduate)\b.{0,40}\b20\d{2}\b'
+    r'|analyst\s+program|graduate\s+program|new\s+grad'
+    r'|campus\s+(?:hire|analyst|associate)|strategy\s+consult',
+    flags=re.IGNORECASE,
+)
+
 # ── Company blocklist ─────────────────────────────────────────────────────────
 # Annotation / gig platforms that post quant-sounding titles for labelling work.
 # Recruitment agencies are NOT blocked — they post real finance roles.
@@ -254,8 +268,8 @@ def filter_reason(row: pd.Series) -> tuple[bool, str]:
     desc    = str(row.get("description", ""))
     company = str(row.get("company", ""))
 
-    if not _QUANT_TITLE_RE.search(title):
-        return False, "EXCLUDED — no quant signal in title"
+    if not (_QUANT_TITLE_RE.search(title) or _PROGRAM_TITLE_RE.search(title)):
+        return False, "EXCLUDED — no quant or new-grad program signal in title"
 
     company_norm = _norm(company)
     if any(blocked in company_norm for blocked in COMPANY_BLOCKLIST):

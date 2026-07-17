@@ -55,8 +55,9 @@ SOURCE_MAP = {
 # Complex boolean expressions — JobSpy passes these verbatim to each board.
 
 RESEARCHER_TERM = (
-    '("quantitative researcher" OR "quant researcher" OR "quantitative analyst" '
-    'OR "quant analyst" OR "quantitative strategist" OR "quant strategist") '
+    '("quantitative researcher" OR "quant researcher" OR "quantitative research" '
+    'OR "quantitative analyst" OR "quant analyst" OR "quantitative strategist" '
+    'OR "quant strategist") '
     '-developer -intern -internship'
 )
 TRADER_TERM = (
@@ -66,6 +67,15 @@ TRADER_TERM = (
 RISK_TERM = (
     '("quantitative risk analyst" OR "quant risk analyst" OR "risk quant" '
     'OR "market risk quant" OR "quant risk") -developer -intern -internship'
+)
+# Bank/consulting 2027 new-grad programs — titles carry no quant keyword
+# (e.g. "2027 Markets Full-Time Analyst Program", "Strategy Consulting
+# Associate - 2027"), so the quant clusters never surface them.
+NEWGRAD_TERM = (
+    '("2027 analyst" OR "2027 associate" OR "analyst program" '
+    'OR "graduate program" OR "full-time analyst" OR "new grad" '
+    'OR "strategy consulting associate") '
+    '-intern -internship'
 )
 # ── SerpAPI search terms (Google Jobs) ────────────────────────────────────────
 # Simple OR chains — complex parenthesised boolean causes zero-result errors
@@ -124,12 +134,17 @@ INTL_CITIES: list[tuple[str, str]] = [
 
 ALL_CITIES = US_CITIES + INTL_CITIES
 
-# 3 role clusters × 18 cities = 54 queries per JobSpy run.
+# 3 quant clusters × 18 cities + new-grad cluster × 11 US cities = 65 queries
+# per JobSpy run. New-grad cluster is US-only to cap runtime — the 2027
+# bank/consulting programs it targets are US postings.
 # Each tuple: (search_term, location, country_indeed)
 JOBSPY_QUERIES: list[tuple[str, str, str]] = [
     (term, loc, country)
     for term in (RESEARCHER_TERM, TRADER_TERM, RISK_TERM)
     for loc, country in ALL_CITIES
+] + [
+    (NEWGRAD_TERM, loc, country)
+    for loc, country in US_CITIES
 ]
 
 # ── JobSpy scrape parameters ──────────────────────────────────────────────────
