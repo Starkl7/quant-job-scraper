@@ -142,4 +142,11 @@ COMPANIES: list[dict] = [
     # Feed is NOT date-sorted — adapter pages the whole board and keeps recent.
 
     {"name": "Capital One", "ats": "radancy", "url": "https://www.capitalonecareers.com"},
+
+    # ── Eightfold AI ───────────────────────────────────────────────────────────
+    # Endpoint: GET {host}/api/apply/v2/jobs?domain={domain}&sort_by=timestamp
+    # HSBC's current site (Eightfold), replacing its legacy Avature portal.
+    # Descriptions backfilled by scoring.
+
+    {"name": "HSBC", "ats": "eightfold", "host": "portal.careers.hsbc.com", "domain": "hsbc.com"},
 ]

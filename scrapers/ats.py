@@ -8,6 +8,9 @@ Supported ATS types and their public endpoints:
   pinpoint    GET  {url}  (full URL from ats_companies.py)
   workable    POST apply.workable.com/api/v3/accounts/{slug}/jobs
   workday     POST {tenant}.{wd}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs
+  oracle      GET  {host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions
+  radancy     GET  {url}/search-jobs/results
+  eightfold   GET  {host}/api/apply/v2/jobs?domain={domain}&sort_by=timestamp
 
 All fetchers return a list of normalized job dicts with keys:
   title, company, location, site, job_url, description, date_posted,
@@ -17,7 +20,7 @@ All fetchers return a list of normalized job dicts with keys:
 import html
 import re
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import requests
@@ -465,6 +468,85 @@ def _fetch_radancy(company: str, base: str) -> list[dict]:
     return out
 
 
+# ── Eightfold AI ──────────────────────────────────────────────────────────────
+# HSBC's current careers site (portal.careers.hsbc.com) runs on Eightfold —
+# NOT the legacy Avature portal it is migrating off. Unlike the other bank
+# adapters we do NOT recency-filter here: HSBC bulk-migrated its board into
+# Eightfold, so t_create reflects the migration date, not the posting date —
+# open quant/graduate roles carry months-old t_create and would be wrongly
+# aged out. Instead we keyword-target the API's `query` param (bounded, relevant
+# result sets) and let Notion dedup identify what's new, exactly like the
+# SerpAPI/JobSpy layers. Descriptions aren't in the list response → left None.
+
+_EIGHTFOLD_PAGE     = 10   # Eightfold hard-caps the page size at 10 (num>10 is
+                           # silently ignored); paginate via `start` instead
+_EIGHTFOLD_MAX_PAGE = 12   # per query (12 × 10 = 120 jobs) safety cap
+
+# Role-targeted queries covering the scraper's mandate. Fuzzy-matched by
+# Eightfold; the downstream title gate + scoring drop anything off-target.
+_EIGHTFOLD_QUERIES = (
+    "quantitative", "quant trader", "quantitative analyst",
+    "quantitative researcher", "graduate programme",
+)
+
+
+def _fetch_eightfold(company: str, co: dict) -> list[dict]:
+    host    = co.get("host", "")
+    domain  = co.get("domain", "")
+    queries = co.get("queries", _EIGHTFOLD_QUERIES)
+    api = f"https://{host}/api/apply/v2/jobs"
+
+    out: list[dict] = []
+    seen: set = set()
+    for q in queries:
+        for page in range(_EIGHTFOLD_MAX_PAGE):
+            try:
+                r = _SESSION.get(
+                    api,
+                    params={"domain": domain, "query": q,
+                            "start": page * _EIGHTFOLD_PAGE,
+                            "num": _EIGHTFOLD_PAGE, "sort_by": "timestamp"},
+                    timeout=_TIMEOUT,
+                )
+                r.raise_for_status()
+                positions = r.json().get("positions", [])
+            except Exception as exc:
+                print(f"    [ATS] {company} eightfold/{domain} q={q!r}: {exc}")
+                break
+
+            if not positions:
+                break
+
+            for j in positions:
+                jid = j.get("id")
+                if jid in seen:          # de-dupe across overlapping queries
+                    continue
+                seen.add(jid)
+                title = j.get("name", "")
+                if _is_noise(title):
+                    continue
+                ts = j.get("t_create")
+                date_iso = (
+                    datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
+                    if ts else None
+                )
+                location = j.get("location") or ", ".join(j.get("locations", []) or [])
+                out.append(_job(
+                    title=title,
+                    company=company,
+                    location=location,
+                    url=j.get("canonicalPositionUrl", ""),
+                    description=j.get("job_description"),   # empty in list → None
+                    date_posted=date_iso,
+                ))
+
+            if len(positions) < _EIGHTFOLD_PAGE:
+                break
+            time.sleep(_SLEEP)
+
+    return out
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 _FETCHERS = {
@@ -476,6 +558,7 @@ _FETCHERS = {
     "workday":    _fetch_workday,
     "oracle":     _fetch_oracle,
     "radancy":    _fetch_radancy,
+    "eightfold":  _fetch_eightfold,
 }
 
 
@@ -501,6 +584,8 @@ def fetch_all() -> pd.DataFrame:
             label = f"oracle/{co.get('host','')}/{co.get('site','')}"
         elif ats == "radancy":
             label = f"radancy/{url}"
+        elif ats == "eightfold":
+            label = f"eightfold/{co.get('domain','')}"
         else:
             label = f"{ats}/{slug}"
 
@@ -514,7 +599,7 @@ def fetch_all() -> pd.DataFrame:
         try:
             if ats in ("pinpoint", "radancy"):
                 jobs = fetcher(name, url)
-            elif ats in ("workday", "oracle"):
+            elif ats in ("workday", "oracle", "eightfold"):
                 jobs = fetcher(name, co)
             else:
                 jobs = fetcher(name, slug)
