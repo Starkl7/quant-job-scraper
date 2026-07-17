@@ -155,4 +155,11 @@ COMPANIES: list[dict] = [
     # Descriptions backfilled by scoring.
 
     {"name": "HSBC", "ats": "eightfold", "host": "portal.careers.hsbc.com", "domain": "hsbc.com"},
+
+    # ── Phenom People ──────────────────────────────────────────────────────────
+    # Endpoint: POST {url}/widgets (ddoKey=refineSearch), date-sorted + paginated.
+    # Both front-end a Workday backend but Phenom aggregates the full board.
+
+    {"name": "U.S. Bank", "ats": "phenom", "url": "https://careers.usbank.com"},
+    {"name": "RBC",       "ats": "phenom", "url": "https://jobs.rbc.com"},
 ]

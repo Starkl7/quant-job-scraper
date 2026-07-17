@@ -11,6 +11,7 @@ Supported ATS types and their public endpoints:
   oracle      GET  {host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions
   radancy     GET  {url}/search-jobs/results
   eightfold   GET  {host}/api/apply/v2/jobs?domain={domain}&sort_by=timestamp
+  phenom      POST {url}/widgets  (ddoKey=refineSearch)
 
 All fetchers return a list of normalized job dicts with keys:
   title, company, location, site, job_url, description, date_posted,
@@ -556,6 +557,77 @@ def _fetch_eightfold(company: str, co: dict) -> list[dict]:
     return out
 
 
+# ── Phenom People ─────────────────────────────────────────────────────────────
+# U.S. Bank (careers.usbank.com) and RBC (jobs.rbc.com) both run Phenom, which
+# exposes a POST /widgets "refineSearch" endpoint. It supports date-sorting and
+# from/size pagination (size caps at 100), so — like the workday/oracle adapters
+# — we pull newest-first and early-stop on age. lang/country in the body are
+# ignored by the endpoint (any values return the same board). A short
+# descriptionTeaser ships inline; scoring backfills the full text.
+
+_PHENOM_PAGE     = 100  # Phenom accepts up to 100 results per request
+_PHENOM_MAX_PAGE = 15   # hard safety cap (15 × 100 = 1,500 jobs) per company
+
+
+def _fetch_phenom(company: str, co: dict) -> list[dict]:
+    base    = co.get("url", "").rstrip("/")
+    lang    = co.get("lang", "en_us")
+    country = co.get("country", "us")
+    api = f"{base}/widgets"
+
+    out: list[dict] = []
+    frm = 0
+    for _ in range(_PHENOM_MAX_PAGE):
+        body = {
+            "lang": lang, "deviceType": "desktop", "country": country,
+            "pageName": "search-results", "ddoKey": "refineSearch", "stateInfo": {},
+            "eventType": "search", "jobs": True, "keywords": "", "location": "",
+            "locationData": {}, "size": _PHENOM_PAGE, "from": frm,
+            "jobsWithoutTypeaheadKeywords": False, "clickId": "",
+            "searchByLocation": False, "global": False, "selected_fields": {},
+            "sort": {"order": "desc", "field": "postedDate"},
+        }
+        try:
+            r = _SESSION.post(api, json=body, timeout=_TIMEOUT)
+            r.raise_for_status()
+            data = r.json().get("refineSearch", {}).get("data", {})
+            jobs = data.get("jobs", [])
+        except Exception as exc:
+            print(f"    [ATS] {company} phenom/{base} @from={frm}: {exc}")
+            break
+
+        if not jobs:
+            break
+
+        stop = False
+        for j in jobs:
+            title = j.get("title", "")
+            if _is_noise(title):
+                continue
+            age = _iso_age(j.get("postedDate", ""))
+            if age is not None and age > _RECENT_DAYS:
+                stop = True          # date-sorted → the rest are older too
+                break
+            url = j.get("applyUrl") or j.get("jobSeoUrl") or ""
+            if url.endswith("/apply"):
+                url = url[:-len("/apply")]
+            out.append(_job(
+                title=title,
+                company=company,
+                location=j.get("cityStateCountry") or j.get("location", ""),
+                url=url,
+                description=j.get("descriptionTeaser"),   # short teaser; scoring backfills
+                date_posted=(j.get("postedDate") or "")[:10] or None,
+            ))
+
+        if stop or len(jobs) < _PHENOM_PAGE:
+            break
+        frm += _PHENOM_PAGE
+        time.sleep(_SLEEP)
+
+    return out
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 _FETCHERS = {
@@ -567,6 +639,7 @@ _FETCHERS = {
     "workday":    _fetch_workday,
     "oracle":     _fetch_oracle,
     "radancy":    _fetch_radancy,
+    "phenom":     _fetch_phenom,
     "eightfold":  _fetch_eightfold,
 }
 
@@ -595,6 +668,8 @@ def fetch_all() -> pd.DataFrame:
             label = f"radancy/{url}"
         elif ats == "eightfold":
             label = f"eightfold/{co.get('domain','')}"
+        elif ats == "phenom":
+            label = f"phenom/{url}"
         else:
             label = f"{ats}/{slug}"
 
@@ -608,7 +683,7 @@ def fetch_all() -> pd.DataFrame:
         try:
             if ats in ("pinpoint", "radancy"):
                 jobs = fetcher(name, url)
-            elif ats in ("workday", "oracle", "eightfold"):
+            elif ats in ("workday", "oracle", "eightfold", "phenom"):
                 jobs = fetcher(name, co)
             else:
                 jobs = fetcher(name, slug)
