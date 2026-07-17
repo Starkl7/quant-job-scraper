@@ -405,8 +405,13 @@ def _fetch_oracle(company: str, co: dict) -> list[dict]:
 _RADANCY_PAGE     = 100
 _RADANCY_MAX_PAGE = 20   # 20 × 100 = 2,000 jobs — covers Capital One's full board
 
-_RADANCY_HREF_RE = re.compile(r'href="(/job/[^"]+)"')
-_RADANCY_TITLE_RE = re.compile(r"<h2>([^<]+)</h2>")
+# Card boundary: matches both bare "<li>" (Capital One) and "<li class=…>" (ING).
+_RADANCY_CARD_RE = re.compile(r"<li[\s>]")
+# Job link, allowing an optional locale prefix: "/job/…" (Capital One) or
+# "/en/job/…", "/en-us/job/…" (ING and other localized Radancy portals).
+_RADANCY_HREF_RE = re.compile(r'href="(/(?:[a-z]{2}(?:[-_][a-z]{2})?/)?job/[^"]+)"', re.I)
+# <h2> may carry classes (ING) or be bare (Capital One).
+_RADANCY_TITLE_RE = re.compile(r"<h2[^>]*>([^<]+)</h2>")
 _RADANCY_DATE_RE = re.compile(r'job-date-posted">([^<]+)<')
 _RADANCY_LOC_RE  = re.compile(r'job-location">([^<]*)<')
 
@@ -429,15 +434,17 @@ def _fetch_radancy(company: str, base: str) -> list[dict]:
             print(f"    [ATS] {company} radancy @page={page}: {exc}")
             break
 
-        cards = frag.split("<li>")[1:]
+        cards = _RADANCY_CARD_RE.split(frag)[1:]
         if not cards:
             break
 
+        page_jobs = 0
         for c in cards:
             mh = _RADANCY_HREF_RE.search(c)
             mt = _RADANCY_TITLE_RE.search(c)
             if not mh or not mt:
-                continue
+                continue             # nested meta <li> or non-job chunk
+            page_jobs += 1
             title = html.unescape(mt.group(1)).strip()
             if _is_noise(title):
                 continue
@@ -461,7 +468,9 @@ def _fetch_radancy(company: str, base: str) -> list[dict]:
                 date_posted=date_iso,
             ))
 
-        if len(cards) < _RADANCY_PAGE:
+        # End of results when a page yields fewer job cards than requested.
+        # (Count real job cards, not raw <li> splits — cards nest <li> metadata.)
+        if page_jobs < _RADANCY_PAGE:
             break
         time.sleep(_SLEEP)
 

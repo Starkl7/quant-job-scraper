@@ -130,18 +130,24 @@ COMPANIES: list[dict] = [
     {"name": "TD Bank",          "ats": "workday", "tenant": "td",            "wd": "wd3", "site": "TD_Bank_Careers"},
     {"name": "State Street",     "ats": "workday", "tenant": "statestreet",   "wd": "wd1", "site": "Global"},
     {"name": "Northern Trust",   "ats": "workday", "tenant": "ntrs",          "wd": "wd1", "site": "northerntrust"},
+    {"name": "MUFG",             "ats": "workday", "tenant": "mufgub",         "wd": "wd3", "site": "MUFG-Careers"},
+    {"name": "BBVA",             "ats": "workday", "tenant": "bbva",           "wd": "wd3", "site": "BBVA"},
+    {"name": "DBS",              "ats": "workday", "tenant": "dbs",            "wd": "wd3", "site": "DBS_Careers"},
 
     # ── Oracle Cloud Recruiting ────────────────────────────────────────────────
     # Endpoint: GET {host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions
     # Live-verified Jul 2026. Descriptions backfilled by scoring.
 
     {"name": "JPMorgan Chase", "ats": "oracle", "host": "jpmc.fa.oraclecloud.com", "site": "CX_1001"},
+    {"name": "BNY Mellon",     "ats": "oracle", "host": "eofe.fa.us2.oraclecloud.com", "site": "BNY-Careers"},
 
     # ── Radancy (TalentBrew) ───────────────────────────────────────────────────
     # Endpoint: GET {url}/search-jobs/results (JSON envelope, HTML fragment inside)
     # Feed is NOT date-sorted — adapter pages the whole board and keeps recent.
 
     {"name": "Capital One", "ats": "radancy", "url": "https://www.capitalonecareers.com"},
+    {"name": "ING",         "ats": "radancy", "url": "https://www.ing.jobs"},
+    {"name": "Santander",   "ats": "radancy", "url": "https://www.santandercareers.com"},
 
     # ── Eightfold AI ───────────────────────────────────────────────────────────
     # Endpoint: GET {host}/api/apply/v2/jobs?domain={domain}&sort_by=timestamp
