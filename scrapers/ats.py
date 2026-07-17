@@ -12,6 +12,7 @@ Supported ATS types and their public endpoints:
   radancy     GET  {url}/search-jobs/results
   eightfold   GET  {host}/api/apply/v2/jobs?domain={domain}&sort_by=timestamp
   phenom      POST {url}/widgets  (ddoKey=refineSearch)
+  avature     GET  {url}/SearchJobs?jobOffset={n}  (server-rendered HTML)
 
 All fetchers return a list of normalized job dicts with keys:
   title, company, location, site, job_url, description, date_posted,
@@ -628,6 +629,84 @@ def _fetch_phenom(company: str, co: dict) -> list[dict]:
     return out
 
 
+# ── Avature ───────────────────────────────────────────────────────────────────
+# Macquarie Group (recruitment.macquarie.com) runs a classic Avature portal that
+# server-renders results as <article class="article--result"> cards — a plain
+# GET returns them (no JS needed). Paginated via jobOffset (9/page, fixed) and
+# date-sorted newest-first, so we early-stop on age like workday/oracle.
+# NB: mq.wd3.myworkdayjobs.com is Macquarie *University*, a different entity —
+# the Avature portal is the actual Macquarie Group board. Descriptions live on
+# the JobDetail page (per-job) → left None for scoring to backfill.
+
+_AVATURE_PAGE     = 9    # portal-fixed page size (jobRecordsPerPage is ignored)
+_AVATURE_MAX_PAGE = 30   # hard safety cap (30 × 9 = 270 jobs) per company
+
+_AVATURE_CARD_RE  = re.compile(r'<article class="article article--result')
+_AVATURE_JOB_RE   = re.compile(r'JobDetail\?jobId=(\d+)"[^>]*>\s*([^<]+?)\s*</a>')
+_AVATURE_LOC_RE   = re.compile(r'icon-location\.svg.*?<p>\s*([^<]+?)\s*</p>', re.S)
+_AVATURE_DATE_RE  = re.compile(r'(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})')
+
+
+def _fetch_avature(company: str, co: dict) -> list[dict]:
+    base = co.get("url", "").rstrip("/")
+
+    out: list[dict] = []
+    offset = 0
+    for _ in range(_AVATURE_MAX_PAGE):
+        try:
+            r = _SESSION.get(f"{base}/SearchJobs?jobOffset={offset}", timeout=_TIMEOUT)
+            r.raise_for_status()
+            page = r.text
+        except Exception as exc:
+            print(f"    [ATS] {company} avature/{base} @off={offset}: {exc}")
+            break
+
+        cards = _AVATURE_CARD_RE.split(page)[1:]
+        if not cards:
+            break
+
+        stop, page_jobs = False, 0
+        for c in cards:
+            end = c.find("</article>")
+            if end != -1:
+                c = c[:end]
+            mj = _AVATURE_JOB_RE.search(c)
+            if not mj:
+                continue
+            page_jobs += 1
+            jid   = mj.group(1)
+            title = html.unescape(mj.group(2)).strip()
+            if _is_noise(title):
+                continue
+            md = _AVATURE_DATE_RE.search(c)
+            date_iso, age = None, None
+            if md:
+                try:
+                    dt = datetime.strptime(md.group(1), "%d %b %Y").date()
+                    date_iso, age = dt.isoformat(), (date.today() - dt).days
+                except ValueError:
+                    pass
+            if age is not None and age > _RECENT_DAYS:
+                stop = True          # date-sorted → the rest are older too
+                break
+            ml = _AVATURE_LOC_RE.search(c)
+            out.append(_job(
+                title=title,
+                company=company,
+                location=html.unescape(ml.group(1)).strip() if ml else "",
+                url=f"{base}/JobDetail?jobId={jid}",
+                description=None,
+                date_posted=date_iso,
+            ))
+
+        if stop or page_jobs < _AVATURE_PAGE:
+            break
+        offset += _AVATURE_PAGE
+        time.sleep(_SLEEP)
+
+    return out
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 _FETCHERS = {
@@ -641,6 +720,7 @@ _FETCHERS = {
     "radancy":    _fetch_radancy,
     "phenom":     _fetch_phenom,
     "eightfold":  _fetch_eightfold,
+    "avature":    _fetch_avature,
 }
 
 
@@ -670,6 +750,8 @@ def fetch_all() -> pd.DataFrame:
             label = f"eightfold/{co.get('domain','')}"
         elif ats == "phenom":
             label = f"phenom/{url}"
+        elif ats == "avature":
+            label = f"avature/{url}"
         else:
             label = f"{ats}/{slug}"
 
@@ -683,7 +765,7 @@ def fetch_all() -> pd.DataFrame:
         try:
             if ats in ("pinpoint", "radancy"):
                 jobs = fetcher(name, url)
-            elif ats in ("workday", "oracle", "eightfold", "phenom"):
+            elif ats in ("workday", "oracle", "eightfold", "phenom", "avature"):
                 jobs = fetcher(name, co)
             else:
                 jobs = fetcher(name, slug)

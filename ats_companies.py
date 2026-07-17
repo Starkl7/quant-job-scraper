@@ -162,4 +162,11 @@ COMPANIES: list[dict] = [
 
     {"name": "U.S. Bank", "ats": "phenom", "url": "https://careers.usbank.com"},
     {"name": "RBC",       "ats": "phenom", "url": "https://jobs.rbc.com"},
+
+    # ── Avature ────────────────────────────────────────────────────────────────
+    # Endpoint: GET {url}/SearchJobs?jobOffset={n} — server-rendered HTML cards,
+    # date-sorted, 9/page. NB: mq.wd3.myworkdayjobs.com is Macquarie University,
+    # a DIFFERENT entity; this Avature portal is the real Macquarie Group board.
+
+    {"name": "Macquarie", "ats": "avature", "url": "https://recruitment.macquarie.com/en_US/careers"},
 ]
