@@ -1,4 +1,4 @@
-# Job Scraper
+# Job Scraper 
 
 Automated pipeline that scrapes quantitative finance and finance-tech job listings from LinkedIn, Indeed, and Google Jobs, scores them with Gemini AI against your resume, and pushes results to a Notion database — runs daily on GitHub Actions.
 
