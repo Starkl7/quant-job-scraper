@@ -33,12 +33,12 @@ SERPAPI_DRY_RUN = os.environ.get("SERPAPI_DRY_RUN", "false").lower() == "true"
 
 # ── LLM ───────────────────────────────────────────────────────────────────────
 
-# Gemini 3.1 Flash Lite — free tier: 15 RPM, 250k tokens/min, 500 RPD.
+# Primary: Gemini 3.5 Flash Lite. Fallback (on 503): Gemini 3.1 Flash Lite — free tier: 15 RPM, 250k tokens/min, 500 RPD.
 # Verify the exact model ID in AI Studio (aistudio.google.com) and update here.
-SCORING_MODEL             = "models/gemini-3.1-flash-lite"  # 15 RPM, 250k TPM, 500 RPD — PDF + batch scoring
+SCORING_MODEL             = "models/gemini-3.5-flash-lite"  # primary — PDF + batch scoring (verify free-tier RPM/RPD in AI Studio)
 FETCH_DESCRIPTION_MODEL   = "gemma-4-31b-it"                # 15 RPM, unlimited TPM, 1.5k RPD — separate quota
 # Used only when SCORING_MODEL returns 503/UNAVAILABLE. Separate capacity pool; set "" to disable.
-SCORING_FALLBACK_MODEL    = "models/gemini-3.5-flash-lite"
+SCORING_FALLBACK_MODEL    = "models/gemini-3.1-flash-lite"  # 15 RPM, 250k TPM, 500 RPD
 SCORING_BATCH_SIZE        = 10
 
 # ── Notion ────────────────────────────────────────────────────────────────────

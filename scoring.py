@@ -3,7 +3,7 @@ scoring.py — Batch LLM scoring module.
 
 Two-model pipeline:
   • Gemma 4 31B IT       — fetch_description()  (parametric knowledge, no web)
-  • Gemini 3.1 Flash Lite — batch_score()        (PDF inline, 10 jobs/call)
+  • Gemini 3.5 Flash Lite — batch_score()        (PDF inline, 10 jobs/call)
 
 Key-fallback: every LLM call tries the primary client first; on 429 /
 RESOURCE_EXHAUSTED it retries once with the backup client (GEMINI_API_KEY_2).
