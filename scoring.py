@@ -22,7 +22,7 @@ from google.genai import types
 from config import (
     GEMINI_API_KEY, GEMINI_API_KEY_2,
     RESUME_FOLDER_ID, RESUME_LABELS,
-    SCORING_MODEL, FETCH_DESCRIPTION_MODEL,
+    SCORING_MODEL, SCORING_FALLBACK_MODEL, FETCH_DESCRIPTION_MODEL,
 )
 
 
@@ -283,6 +283,24 @@ def fetch_description(
 
 # ── Batch scoring ──────────────────────────────────────────────────────────────
 
+def _generate_scoring(c: genai.Client, contents: list):
+    """
+    Score with SCORING_MODEL; if it is overloaded (503/UNAVAILABLE), retry the
+    same request once on SCORING_FALLBACK_MODEL. 429s are NOT handled here so
+    the callers' backup-key logic still applies.
+    """
+    cfg = types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT)
+    try:
+        return c.models.generate_content(model=SCORING_MODEL, contents=contents, config=cfg)
+    except Exception as exc:
+        err = str(exc).upper()
+        overloaded = "503" in err or "UNAVAILABLE" in err
+        if not overloaded or not SCORING_FALLBACK_MODEL:
+            raise
+        print(f"    ↺ {SCORING_MODEL} overloaded — falling back to {SCORING_FALLBACK_MODEL}")
+        return c.models.generate_content(model=SCORING_FALLBACK_MODEL, contents=contents, config=cfg)
+
+
 def batch_score(
     jobs: list[dict],
     resume_pdfs: dict[str, bytes],
@@ -350,11 +368,7 @@ def batch_score(
 
     for attempt, c in enumerate(clients_to_try):
         try:
-            response = c.models.generate_content(
-                model=SCORING_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
-            )
+            response = _generate_scoring(c, contents)
             results = _parse_batch_response(response.text, len(jobs))
             break
         except Exception as exc:
@@ -407,11 +421,7 @@ def score_single(
 
     for attempt, c in enumerate(clients_to_try):
         try:
-            response = c.models.generate_content(
-                model=SCORING_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
-            )
+            response = _generate_scoring(c, contents)
             parsed = _parse_batch_response(response.text, 1)
             if parsed[0] is not None:
                 return parsed[0]

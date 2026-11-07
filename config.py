@@ -37,6 +37,8 @@ SERPAPI_DRY_RUN = os.environ.get("SERPAPI_DRY_RUN", "false").lower() == "true"
 # Verify the exact model ID in AI Studio (aistudio.google.com) and update here.
 SCORING_MODEL             = "models/gemini-3.1-flash-lite"  # 15 RPM, 250k TPM, 500 RPD — PDF + batch scoring
 FETCH_DESCRIPTION_MODEL   = "gemma-4-31b-it"                # 15 RPM, unlimited TPM, 1.5k RPD — separate quota
+# Used only when SCORING_MODEL returns 503/UNAVAILABLE. Separate capacity pool; set "" to disable.
+SCORING_FALLBACK_MODEL    = "models/gemini-3.5-flash-lite"
 SCORING_BATCH_SIZE        = 10
 
 # ── Notion ────────────────────────────────────────────────────────────────────
