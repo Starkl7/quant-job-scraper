@@ -61,6 +61,17 @@ def init_client() -> genai.Client:
 
 # ── Model validation ───────────────────────────────────────────────────────────
 
+_VALIDATE_ATTEMPTS = 4
+_TRANSIENT_MARKERS = ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500", "INTERNAL",
+                      "504", "DEADLINE", "TIMEOUT", "TIMED OUT", "CONNECTION")
+
+
+def _is_transient_error(msg: str) -> bool:
+    """True for overload / rate-limit / network errors that are worth retrying."""
+    up = msg.upper()
+    return any(m in up for m in _TRANSIENT_MARKERS)
+
+
 def validate_models(
     client: genai.Client,
     backup_client: genai.Client | None = None,
@@ -82,24 +93,42 @@ def validate_models(
             time.sleep(3)   # avoid hitting per-second rate limit between consecutive validation calls
         clients = [c for c in [client, backup_client] if c]
         ok = False
+        saw_transient = False
         for c in clients:
-            try:
-                r = c.models.generate_content(model=model, contents=test, config=cfg)
-                # Any response without an exception means the model is reachable.
-                # r.text may be empty if the safety filter blocks "OK" — that's fine.
-                tag = "(backup)" if c is not client else ""
-                resp_preview = (r.text or "").strip()[:30] or "(empty — safety filter?)"
-                print(f"  ✓ {label} {tag}  [{resp_preview}]".rstrip())
-                ok = True
+            for attempt in range(_VALIDATE_ATTEMPTS):
+                try:
+                    r = c.models.generate_content(model=model, contents=test, config=cfg)
+                    # Any response without an exception means the model is reachable.
+                    # r.text may be empty if the safety filter blocks "OK" — that's fine.
+                    tag = "(backup)" if c is not client else ""
+                    resp_preview = (r.text or "").strip()[:30] or "(empty — safety filter?)"
+                    print(f"  ✓ {label} {tag}  [{resp_preview}]".rstrip())
+                    ok = True
+                    break
+                except Exception as exc:
+                    msg = str(exc)
+                    print(f"  ✗ {label}: {msg[:120]}")
+                    if not _is_transient_error(msg):
+                        break  # bad key / model ID: retrying won't help, try next key
+                    saw_transient = True
+                    if attempt < _VALIDATE_ATTEMPTS - 1:
+                        delay = 5 * 3 ** attempt  # 5s, 15s, 45s
+                        print(f"    transient error — retrying in {delay}s "
+                              f"({attempt + 1}/{_VALIDATE_ATTEMPTS - 1})")
+                        time.sleep(delay)
+            if ok:
                 break
-            except Exception as exc:
-                print(f"  ✗ {label}: {str(exc)[:120]}")
         if not ok:
-            if fatal:
+            if fatal and not saw_transient:
                 raise RuntimeError(
-                    f"Model validation failed for {label} ({model}). "
+                    f"Model validation failed for {label} ({model}) with a non-transient error. "
                     "Check GEMINI_API_KEY / GEMINI_API_KEY_2 and the model ID in config.py."
                 )
+            elif fatal:
+                # Overloaded/rate-limited, not misconfigured: batch_score has its own
+                # retry + backup-key handling, so don't abort the whole run.
+                print(f"  ⚠ {label} still unavailable after retries (503/429/timeout) — "
+                      "continuing; scoring calls will retry on their own.")
             else:
                 print(f"  ⚠ {label} unavailable — jobs will be scored on title/company only (low_confidence=True).")
 
