@@ -25,10 +25,11 @@ load_dotenv()
 import notion
 from config import (
     NOTION_TOKEN, NOTION_DB_ID, GEMINI_API_KEY,
-    SCORING_BATCH_SIZE,
+    SCORING_BATCH_SIZE, ENABLE_GEMMA_DESCRIPTIONS,
 )
 from filters import apply_filters, is_known_job, make_index_keys
 from notify import send_slack
+from runlog import RunLog
 from scoring import (
     init_clients, load_resumes, batch_score,
     fetch_description, score_single, validate_models,
@@ -173,7 +174,7 @@ def _chunked(iterable, n):
         yield batch
 
 
-def main() -> None:
+def _main(runlog: RunLog) -> None:
     if not NOTION_TOKEN or not NOTION_DB_ID:
         raise SystemExit("NOTION_TOKEN and NOTION_DB_ID must be set in environment")
     if not GEMINI_API_KEY:
@@ -202,23 +203,26 @@ def main() -> None:
     print(f"     {len(existing_keys)} existing dedup keys\n")
 
     print("2/3  Fetching from ATS endpoints…")
-    raw_df = fetch_all()
+    with runlog.phase("scrape"):
+        raw_df = fetch_all(runlog=runlog)
+    runlog.funnel["raw"] = len(raw_df)
     print()
 
     if raw_df.empty:
         msg = f"🏢 *ATS* ({ts}) — all endpoints returned 0 results."
         print(msg)
-        send_slack(msg)
+        send_slack(msg + (f"\n{runlog.slack_flags_line()}" if runlog.slack_flags_line() else ""))
         return
 
     print(f"     {len(raw_df)} raw listings fetched")
     filtered_df = apply_filters(raw_df)
     filtered_df = _ats_filter(filtered_df)
+    runlog.funnel["after_filters"] = len(filtered_df)
 
     if filtered_df.empty:
         msg = f"🏢 *ATS* ({ts}) — 0 jobs passed filters."
         print(msg)
-        send_slack(msg)
+        send_slack(msg + (f"\n{runlog.slack_flags_line()}" if runlog.slack_flags_line() else ""))
         return
 
     net_new = filtered_df[~filtered_df.apply(
@@ -227,6 +231,7 @@ def main() -> None:
         axis=1,
     )]
     skipped = len(filtered_df) - len(net_new)
+    runlog.funnel["net_new"] = len(net_new)
     print(f"     {len(net_new)} net-new (skipped {skipped} already in Notion)\n")
 
     if net_new.empty:
@@ -235,7 +240,7 @@ def main() -> None:
             f"({len(filtered_df)} matched filters, all already in Notion)."
         )
         print(msg)
-        send_slack(msg)
+        send_slack(msg + (f"\n{runlog.slack_flags_line()}" if runlog.slack_flags_line() else ""))
         return
 
     # ── Phase 2: Score + push ─────────────────────────────────────────────────
@@ -247,6 +252,7 @@ def main() -> None:
     low_conf_queue = []
     jobs_list      = net_new.to_dict("records")
 
+    _t_score = time.time()
     for batch in _chunked(jobs_list, SCORING_BATCH_SIZE):
         scores = batch_score(batch, resumes, client,
                              fetch_missing=True, backup_client=backup)
@@ -274,11 +280,13 @@ def main() -> None:
 
         time.sleep(5)
 
+    runlog.phases["scoring"] = round(time.time() - _t_score, 1)
+
     # ── Phase 3: Low-confidence retries (up to 2 passes) ─────────────────────
     re_scored        = 0
     still_needs_desc = list(low_conf_queue)
 
-    for retry_num in range(1, 3):
+    for retry_num in range(1, 3 if ENABLE_GEMMA_DESCRIPTIONS else 1):
         if not still_needs_desc:
             break
         print(f"\n  ↺ Retry {retry_num}/2: {len(still_needs_desc)} job(s) missing descriptions…")
@@ -337,9 +345,21 @@ def main() -> None:
         if len(failed_push) > 3:
             lines.append(f"  …and {len(failed_push) - 3} more")
 
+    runlog.counts.update(added=added, failed_push=len(failed_push), re_scored=re_scored,
+                         visa_dropped=visa_dropped, low_confidence=len(low_conf_queue))
+    if runlog.slack_flags_line():
+        lines.append(runlog.slack_flags_line())
     msg = "\n".join(lines)
     print(f"\n{msg}")
     send_slack(msg)
+
+
+def main() -> None:
+    runlog = RunLog("ats")
+    try:
+        _main(runlog)
+    finally:
+        runlog.write()   # always persist the health record, even on early return / crash
 
 
 if __name__ == "__main__":

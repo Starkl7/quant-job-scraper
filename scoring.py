@@ -22,7 +22,7 @@ from google.genai import types
 from config import (
     GEMINI_API_KEY, GEMINI_API_KEY_2,
     RESUME_FOLDER_ID, RESUME_LABELS,
-    SCORING_MODEL, SCORING_FALLBACK_MODEL, FETCH_DESCRIPTION_MODEL,
+    SCORING_MODEL, SCORING_FALLBACK_MODEL, FETCH_DESCRIPTION_MODEL, ENABLE_GEMMA_DESCRIPTIONS,
 )
 
 
@@ -85,10 +85,11 @@ def validate_models(
     test = types.Part.from_text(text="Reply with the single word OK.")
     cfg  = types.GenerateContentConfig(max_output_tokens=5)
 
-    for i, (model, label, fatal) in enumerate([
-        (SCORING_MODEL,           "Gemini (scoring)",      True),
-        (FETCH_DESCRIPTION_MODEL, "Gemma  (descriptions)", False),  # non-fatal: jobs still scored with low_confidence
-    ]):
+    targets = [(SCORING_MODEL, "Gemini (scoring)", True)]
+    if ENABLE_GEMMA_DESCRIPTIONS:
+        # non-fatal: jobs still scored with low_confidence
+        targets.append((FETCH_DESCRIPTION_MODEL, "Gemma  (descriptions)", False))
+    for i, (model, label, fatal) in enumerate(targets):
         if i > 0:
             time.sleep(3)   # avoid hitting per-second rate limit between consecutive validation calls
         clients = [c for c in [client, backup_client] if c]
@@ -322,6 +323,8 @@ def batch_score(
     """
     if not jobs:
         return []
+
+    fetch_missing = fetch_missing and ENABLE_GEMMA_DESCRIPTIONS
 
     # ── Pre-fetch missing descriptions ────────────────────────────────────────
     if fetch_missing:

@@ -3,6 +3,7 @@ scrapers/jobspy.py — LinkedIn + Indeed scraper via python-jobspy.
 Returns a normalized DataFrame matching the shared NORMALIZED_SCHEMA.
 """
 
+import logging
 import random
 import threading
 import time
@@ -1014,44 +1015,131 @@ def scrape_one(
     )
 
 
-def scrape_all(queries: list[tuple] = JOBSPY_QUERIES) -> pd.DataFrame:
+class _ErrorCounter(logging.Handler):
+    """JobSpy swallows LinkedIn HTTP failures (logs ERROR, returns partial/empty
+    frames). Count those ERROR records so a query that 'succeeded' with 0 or 10
+    rows because of a connection error is not mistaken for a genuine result."""
+
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.count = 0
+        self.last  = ""
+
+    def emit(self, record):
+        self.count += 1
+        self.last = record.getMessage()[:200]
+
+
+_QUERY_TIMEOUT   = 90    # seconds per query — LinkedIn can occasionally hang
+_TIMEOUT_GRACE   = 45    # extra wait for a hung thread so it can't overlap the next query
+_RETRY_COOLDOWN  = 30    # seconds before the end-of-run retry pass
+_RETRY_MAX       = 20    # cap on retried queries per run
+_RETRY_BUDGET_S  = 25 * 60
+
+
+def _run_query(search_term: str, location: str, counter: _ErrorCounter):
+    """Run one query in a worker thread. Returns (df|None, status, error, seconds)."""
+    result_box: list[pd.DataFrame] = []
+    exc_box:    list[Exception]    = []
+    counter.count, counter.last = 0, ""
+
+    def _worker():
+        try:
+            result_box.append(scrape_one(search_term, location))
+        except Exception as e:
+            exc_box.append(e)
+
+    t0 = time.time()
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(timeout=_QUERY_TIMEOUT)
+    if t.is_alive():
+        t.join(timeout=_TIMEOUT_GRACE)   # don't start the next query on top of a hung one
+        return None, "timeout", f"no response in {_QUERY_TIMEOUT}s", time.time() - t0
+    if exc_box:
+        return None, "exception", str(exc_box[0]), time.time() - t0
+
+    df = result_box[0] if result_box else pd.DataFrame(columns=NORMALIZED_SCHEMA)
+    if counter.count:                       # swallowed HTTP errors — result is suspect
+        status = "partial_errors"
+    elif df.empty:
+        status = "zero"
+    else:
+        status = "ok"
+    return df, status, counter.last, time.time() - t0
+
+
+def scrape_all(queries: list[tuple] = JOBSPY_QUERIES, runlog=None) -> pd.DataFrame:
     """
     Run all queries and return a deduplicated, schema-normalized DataFrame.
     Each query tuple: (search_term, location, country_indeed).
+
+    Queries that time out, raise, or hit swallowed HTTP errors get ONE retry
+    pass at the end (after a cooldown), keeping whichever attempt returned more
+    rows. Every query's final status is recorded on `runlog` when given.
     """
-    frames: list[pd.DataFrame] = []
+    counter = _ErrorCounter()
+    li_logger = logging.getLogger("JobSpy:LinkedIn")
+    li_logger.addHandler(counter)
 
-    _QUERY_TIMEOUT = 90  # seconds per query — LinkedIn can occasionally hang
+    outcomes: list[dict] = []   # one per query: df, status, error, secs, attempts
+    consecutive_bad = 0
 
-    for search_term, location, _country in queries:   # _country unused (Indeed dropped)
-        result_box: list[pd.DataFrame] = []
-        exc_box:    list[Exception]    = []
-
-        def _worker(st=search_term, loc=location):
-            try:
-                result_box.append(scrape_one(st, loc))
-            except Exception as e:
-                exc_box.append(e)
-
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
-        t.join(timeout=_QUERY_TIMEOUT)
-
-        if t.is_alive():
-            # Thread still running — hung HTTP connection. Move on; daemon thread
-            # will be cleaned up when the process exits.
-            print(f"  TIMEOUT ({_QUERY_TIMEOUT}s) — {search_term[:55]!r} @ {location} — skipping")
-        elif exc_box:
-            print(f"  ERROR — {search_term[:55]!r} @ {location}: {exc_box[0]}")
-        else:
-            df = result_box[0] if result_box else pd.DataFrame(columns=NORMALIZED_SCHEMA)
-            if not df.empty:
-                frames.append(df)
-                print(f"  {len(df):>3} results — {search_term[:55]!r} @ {location}")
+    try:
+        for search_term, location, _country in queries:   # _country unused (Indeed dropped)
+            df, status, err, secs = _run_query(search_term, location, counter)
+            outcomes.append({"term": search_term, "loc": location, "df": df,
+                             "status": status, "err": err, "secs": secs,
+                             "attempts": 1, "errors": counter.count})
+            n = 0 if df is None else len(df)
+            if status in ("ok", "zero"):
+                print(f"  {n:>3} results — {search_term[:55]!r} @ {location}" if n
+                      else f"    0 results — {search_term[:55]!r} @ {location}")
+                consecutive_bad = 0
             else:
-                print(f"    0 results — {search_term[:55]!r} @ {location}")
+                print(f"  {status.upper()} ({n} rows) — {search_term[:55]!r} @ {location}: {err[:100]}")
+                consecutive_bad += 1
 
-        time.sleep(2)  # avoid LinkedIn rate-limits between queries
+            time.sleep(2)  # avoid LinkedIn rate-limits between queries
+            if consecutive_bad >= 3:       # LinkedIn is throttling us — back off before continuing
+                print("  … 3 consecutive failures, cooling down 30s")
+                time.sleep(30)
+                consecutive_bad = 0
+
+        # ── One retry pass for suspect queries ────────────────────────────────
+        suspect = [o for o in outcomes if o["status"] in ("timeout", "exception", "partial_errors")]
+        suspect = suspect[:_RETRY_MAX]
+        if suspect:
+            print(f"\n  ↺ Retrying {len(suspect)} suspect quer{'y' if len(suspect)==1 else 'ies'} "
+                  f"after {_RETRY_COOLDOWN}s cooldown…")
+            time.sleep(_RETRY_COOLDOWN)
+            t_start = time.time()
+            for o in suspect:
+                if time.time() - t_start > _RETRY_BUDGET_S:
+                    print("  … retry time budget exhausted")
+                    break
+                df, status, err, secs = _run_query(o["term"], o["loc"], counter)
+                o["attempts"] += 1
+                old_n = 0 if o["df"] is None else len(o["df"])
+                new_n = 0 if df is None else len(df)
+                print(f"    retry {status:<14} {new_n:>3} rows (was {old_n}) — "
+                      f"{o['term'][:40]!r} @ {o['loc']}")
+                if new_n >= old_n and df is not None:
+                    o["df"] = df
+                    o["status"], o["err"], o["errors"] = status, err, counter.count
+                time.sleep(3)
+    finally:
+        li_logger.removeHandler(counter)
+
+    frames: list[pd.DataFrame] = []
+    for o in outcomes:
+        n = 0 if o["df"] is None else len(o["df"])
+        if n:
+            frames.append(o["df"])
+        if runlog is not None:
+            runlog.query(o["term"][:60], o["loc"], n, o["status"],
+                         attempts=o["attempts"], errors=o["errors"],
+                         error=o["err"], seconds=o["secs"])
 
     if not frames:
         return pd.DataFrame(columns=NORMALIZED_SCHEMA)

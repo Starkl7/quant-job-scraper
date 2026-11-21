@@ -12,6 +12,8 @@ concurrency:
 jobs:
   scrape-ats:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write         # push run-health log to the run-logs branch
     timeout-minutes: 120      # 42 endpoints + scoring + push ≈ 20–40 min; generous buffer
 
     steps:
@@ -37,3 +39,17 @@ jobs:
           RESUME_FOLDER_ID:       ${{ secrets.RESUME_FOLDER_ID }}
           SLACK_WEBHOOK_URL:      ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python run_ats.py
+
+      - name: Upload run-health log (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-health-ats-${{ github.run_id }}
+          path: logs/run_health.jsonl
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Push run-health log to run-logs branch
+        if: always()
+        continue-on-error: true
+        run: bash scripts/push_run_log.sh

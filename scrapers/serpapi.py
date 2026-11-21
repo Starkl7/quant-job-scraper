@@ -110,6 +110,7 @@ def to_dataframe(raw_jobs: list[dict]) -> pd.DataFrame:
 def scrape_all(
     key_groups: list[dict] = SERPAPI_KEY_GROUPS,
     terms: dict[str, str]  = GJ_TERMS,
+    runlog=None,
 ) -> pd.DataFrame:
     """
     Iterate over key_groups × cities × terms and return a combined DataFrame.
@@ -129,14 +130,27 @@ def scrape_all(
                     print(f"  [DRY RUN] would search: {term_label:<12} @ {city}")
                     time.sleep(0.1)
                     continue
-                try:
-                    raw  = scrape_one(term_q, city, api_key)
-                    df   = to_dataframe(raw)
+                t0, attempts, err = time.time(), 0, ""
+                raw = None
+                for attempts in (1, 2):          # one retry for transient failures
+                    try:
+                        raw = scrape_one(term_q, city, api_key)
+                        err = ""
+                        break
+                    except Exception as exc:
+                        err = f"{type(exc).__name__}: {exc}"
+                        print(f"  ERROR (attempt {attempts}) — {term_label:<12} @ {city}: {exc}")
+                        if attempts == 1:
+                            time.sleep(5)
+                if raw is not None:
+                    df = to_dataframe(raw)
                     if not df.empty:
                         frames.append(df)
                     print(f"  {len(raw):>3} results — {term_label:<12} @ {city}")
-                except Exception as exc:
-                    print(f"  ERROR — {term_label:<12} @ {city}: {exc}")
+                if runlog is not None:
+                    status = "exception" if raw is None else ("ok" if raw else "zero")
+                    runlog.query(term_label, city, 0 if raw is None else len(raw), status,
+                                 attempts=attempts, error=err, seconds=time.time() - t0)
 
                 time.sleep(1)
 

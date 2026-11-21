@@ -724,7 +724,7 @@ _FETCHERS = {
 }
 
 
-def fetch_all() -> pd.DataFrame:
+def fetch_all(runlog=None) -> pd.DataFrame:
     """
     Poll every company in ats_companies.COMPANIES and return a combined DataFrame.
     Rows use the same column schema as the JobSpy / SerpAPI scrapers so that
@@ -762,6 +762,7 @@ def fetch_all() -> pd.DataFrame:
             print(f"  — unknown ATS '{ats}', skipping")
             continue
 
+        err = ""
         try:
             if ats in ("pinpoint", "radancy"):
                 jobs = fetcher(name, url)
@@ -771,9 +772,12 @@ def fetch_all() -> pd.DataFrame:
                 jobs = fetcher(name, slug)
         except Exception as exc:
             print(f"  — unexpected error: {exc}")
+            err  = f"{type(exc).__name__}: {exc}"
             jobs = []
 
         print(f"  → {len(jobs)} listings")
+        if runlog is not None:
+            runlog.source(name, ats, len(jobs), err)
         all_jobs.extend(jobs)
         time.sleep(_SLEEP)
 

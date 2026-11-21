@@ -25,3 +25,6 @@ scrape_firecrawl_gj_test.py
 test_new_sources.py
 test_run.py
 score.py
+
+# Run-health logs (persisted via the run-logs branch / Actions artifacts)
+logs/

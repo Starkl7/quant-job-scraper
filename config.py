@@ -41,6 +41,12 @@ FETCH_DESCRIPTION_MODEL   = "gemma-4-31b-it"                # 15 RPM, unlimited 
 SCORING_FALLBACK_MODEL    = "models/gemini-3.1-flash-lite"  # 15 RPM, 250k TPM, 500 RPD
 SCORING_BATCH_SIZE        = 10
 
+# Gemma-generated "descriptions" are OFF by default. Nov 2026 run logs: ~5% success,
+# 68% of failures are 503s, and the fetch + 2 retry passes took ~50-70% of wall-clock.
+# When off, description-less jobs are scored on title/company and flagged low_confidence.
+# Re-enable with ENABLE_GEMMA_DESCRIPTIONS=true (also re-enables the Phase-3 retry passes).
+ENABLE_GEMMA_DESCRIPTIONS = os.environ.get("ENABLE_GEMMA_DESCRIPTIONS", "false").lower() == "true"
+
 # ── Notion ────────────────────────────────────────────────────────────────────
 
 NOTION_API_VERSION = "2022-06-28"

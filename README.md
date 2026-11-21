@@ -33,6 +33,27 @@ All implement the same 4-phase pipeline:
 3. **Score → push** — batch through Gemini (up to 10 jobs per call), push each to Notion; jobs scored without a description are queued for retry
 4. **Low-confidence retry** — fetch missing descriptions via Gemma + Google Search grounding, re-score and update existing Notion pages; up to 2 retry attempts per job
 
+## Run-health log
+
+Every run appends one JSON line to `logs/run_health.jsonl` (funnel counts, phase timings,
+every failed / timed-out / empty query, ATS sources returning 0 listings, health flags).
+Actions runners are ephemeral, so each workflow also uploads the file as an artifact
+(90 days) and appends it to the `run-logs` branch via `scripts/push_run_log.sh`.
+
+```bash
+git fetch origin run-logs && git show origin/run-logs:run_health.jsonl | jq -c '{p:.pipeline,t:.started,flags:.flags}'
+```
+
+Slack gets an extra `⚠️ Health:` line only when a run breaches a threshold
+(>20% of queries failed/empty, or any ATS source returned 0).
+
+LinkedIn queries that time out, raise, or hit swallowed HTTP errors are retried once at the
+end of the scrape (after a cooldown) and the better result is kept.
+
+**Gemma descriptions are off by default** (`ENABLE_GEMMA_DESCRIPTIONS=true` re-enables them
+and the Phase-3 retry passes): ~5% success rate and 50-70% of wall-clock in Nov 2026 logs.
+Jobs without a description are scored on title/company and flagged low-confidence.
+
 ## Roles Targeted
 
 **JobSpy boolean search terms** (LinkedIn + Indeed):
