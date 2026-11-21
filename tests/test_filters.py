@@ -44,6 +44,14 @@ def test_weak_signals_admit_real_roles():
         assert filters.is_early_career(_row(t)), t
 
 
+def test_nov2026_vocab_additions():
+    for t in ["Liquidity Metrics Strats, Associate", "Stress Testing - Wholesale Credit Risk - Associate"]:
+        assert filters.is_early_career(_row(t)), t
+    for t in ["Quantitative Researcher - Experienced Hire", "Risk Modeler III, Model Risk",
+              "Quantitative Trading & Research - 2027 ReEntry", "Quant Developer Stage"]:
+        assert not filters.is_early_career(_row(t)), t
+
+
 def test_location_format_variants_collapse():
     df = pd.DataFrame([
         _row("Quantitative Researcher", "Acme", "New York, NY"),

@@ -16,6 +16,8 @@ SENIOR_TITLE_PATTERNS: list[str] = [
     "senior", r"\bsr\b", "lead ", "principal", "director",
     r"\bvp\b", "vice president", "head of", "managing director",
     r"\bmd\b", "manager", "staff quant", "chief ", "partner",
+    # Added Nov 2026 (live sample): mid-career postings that slipped through
+    r"experienced\s+hire", r"\b(?:iii|iv)\b", r"re-?entry",
 ]
 _SENIOR_RE = re.compile(
     "|".join(SENIOR_TITLE_PATTERNS), flags=re.IGNORECASE
@@ -30,6 +32,7 @@ _SENIOR_RE = re.compile(
 INTERN_PATTERNS: list[str] = [
     r"\bintern\b", r"\binterns\b", "internship", r"\bco-?op\b",
     "summer analyst", "summer associate",
+    r"\bstage\b",   # French-style internship ("Quant Developer Stage")
 ]
 _INTERN_RE = re.compile(
     "|".join(INTERN_PATTERNS), flags=re.IGNORECASE
@@ -73,7 +76,8 @@ _WEAK_TITLE_RE = re.compile(
     r'|derivatives?\s+(?:trad|struct|quant|analyst|pricing|research)'
     r'|(?:credit|risk|market|financial|loss|prepayment|margin|mortgage|pricing)\w*\s+model(?:l?er|l?ing)\b'
     r'|model\s+develop'
-    r'|strategies\s+research',
+    r'|strategies\s+research'
+    r'|\bstrats?\b|stress\s+test|\bccar\b|\bcecl\b|risk\s+(?:developer|engineer)|\bfrtb\b',
     flags=re.IGNORECASE,
 )
 
