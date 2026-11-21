@@ -85,6 +85,32 @@ NEWGRAD_TERM = (
     'OR "strategy consulting associate") '
     '-intern -internship'
 )
+# Added Nov 2026 (live yield test: 10 / 3 / 15 net-new passing jobs vs 0 net-new
+# from the three clusters above, which are saturated).
+# Model validation / model risk — matches the Wells Fargo SR 11-7 background.
+MODELVAL_TERM = (
+    '("model validation" OR "model validator" OR "model risk" '
+    'OR "quantitative model" OR "model development") -intern -internship'
+)
+# Quant developer — C++/low-latency roles. RESEARCHER_TERM excludes "developer".
+QUANTDEV_TERM = (
+    '("quantitative developer" OR "quant developer" OR "quantitative software engineer" '
+    'OR "quant software engineer" OR "quant engineer") -intern -internship'
+)
+# Strats / systematic trading analysts (junior trader titles are NOT searched: the
+# sample returned mostly energy / commodity traders).
+STRATS_TERM = (
+    '("desk strategist" OR "strats" OR "trading strategist" OR "systematic trading" '
+    'OR "trading analyst" OR "quantitative strategist")  -intern -internship'
+)
+# Cities for the new clusters: country-wide plus the main bank / hedge-fund hubs.
+NEW_CLUSTER_LOCATIONS: list[tuple[str, str]] = [
+    ("United States",  "USA"),
+    ("New York, NY",   "USA"),
+    ("Chicago, IL",    "USA"),
+    ("Charlotte, NC",  "USA"),
+]
+
 # ── SerpAPI search terms (Google Jobs) ────────────────────────────────────────
 # Simple OR chains — complex parenthesised boolean causes zero-result errors
 # on Google Jobs when combined with date filters.
@@ -142,8 +168,8 @@ INTL_CITIES: list[tuple[str, str]] = [
 
 ALL_CITIES = US_CITIES + INTL_CITIES
 
-# 3 quant clusters × 18 cities + new-grad cluster × 11 US cities = 65 queries
-# per JobSpy run. New-grad cluster is US-only to cap runtime — the 2027
+# 3 quant clusters × 18 cities + new-grad cluster × 11 US cities + 3 new clusters
+# × 4 locations = 77 queries per JobSpy run. New-grad cluster is US-only to cap runtime — the 2027
 # bank/consulting programs it targets are US postings.
 # Each tuple: (search_term, location, country_indeed)
 JOBSPY_QUERIES: list[tuple[str, str, str]] = [
@@ -153,6 +179,10 @@ JOBSPY_QUERIES: list[tuple[str, str, str]] = [
 ] + [
     (NEWGRAD_TERM, loc, country)
     for loc, country in US_CITIES
+] + [
+    (term, loc, country)
+    for term in (MODELVAL_TERM, QUANTDEV_TERM, STRATS_TERM)
+    for loc, country in NEW_CLUSTER_LOCATIONS
 ]
 
 # ── JobSpy scrape parameters ──────────────────────────────────────────────────

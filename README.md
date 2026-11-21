@@ -66,6 +66,8 @@ Jobs without a description are scored on title/company and flagged low-confidenc
 
 **SerpAPI search terms** (Google Jobs): Researcher, Trader, Risk, ModelRisk
 
+**Added Nov 2026** (3 clusters × 4 locations: US-wide, New York, Chicago, Charlotte): model validation / model risk, quant developer, and strats / systematic trading analyst. Title gate widened (systematic, trading analyst, derivatives, modeler/modeling, model development); the location-blind title+company dedup was removed so the same role in different cities is kept.
+
 Cities covered: 18 US metro areas across 54 JobSpy queries per run (3 role clusters × 18 cities), lookback window of 72 hours.
 
 ## AI Scoring

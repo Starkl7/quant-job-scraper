@@ -57,7 +57,12 @@ _GRAD_RE = re.compile(
 
 _QUANT_TITLE_RE = re.compile(
     r'\bquant\b|quantitative|\balgo\b|algorithmic|\btrader\b|researcher'
-    r'|strategist|risk\s+analyst|model\s+(?:risk|validat)',
+    r'|strategist|risk\s+analyst|model\s+(?:risk|validat)'
+    # Added Nov 2026 after a live sample showed real roles rejected by the gate
+    # (e.g. "Systematic Derivatives - Associate", "Junior Trading Analyst",
+    # "Systematic Credit Strategies Research"). Gemini scoring does the relevance call.
+    r'|systematic|trading\s+analyst|derivatives?\b|model(?:l?er|l?ing)\b'
+    r'|model\s+develop|strategies\s+research',
     flags=re.IGNORECASE,
 )
 
@@ -358,12 +363,9 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     before = len(df)
     df = df.drop_duplicates(subset=["_dedup_key"])
 
-    # Secondary dedup: same title + company across different locations (keep first)
-    df["_tc_key"] = df.apply(
-        lambda r: f"{_norm(str(r.get('title', '')))}|{_norm_company(str(r.get('company', '')))}",
-        axis=1,
-    )
-    df = df.drop_duplicates(subset=["_tc_key"])
+    # NOTE: there used to be a second dedup on title+company ignoring location.
+    # It silently dropped the same role in other cities (18% of passing rows in a
+    # Nov 2026 sample, e.g. U.S. Bank Minneapolis vs Charlotte) — cities stay distinct.
     after_dedup = len(df)
 
     # Early-career filter (+ non-quant denylist). Track what the denylist removed.
