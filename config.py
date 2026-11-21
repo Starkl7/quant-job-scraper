@@ -57,6 +57,7 @@ SOURCE_MAP = {
     "indeed":   "Indeed",
     "google":   "Google Jobs",
     "ats":      "ATS",
+    "wallstreetcareers": "Wall Street Careers",
 }
 
 # ── JobSpy search terms (LinkedIn + Indeed) ────────────────────────────────────
@@ -103,6 +104,20 @@ STRATS_TERM = (
     '("desk strategist" OR "strats" OR "trading strategist" OR "systematic trading" '
     'OR "trading analyst" OR "quantitative strategist")  -intern -internship'
 )
+# Second wave (Nov 2026 free live yield test, US-wide only — the hubs overlap):
+MODELER_TERM = (
+    '("quantitative modeler" OR "quantitative modeling" OR "quantitative modelling" '
+    'OR "model developer") -senior -intern -internship'
+)
+MODELRISKMGMT_TERM = (
+    '("model risk management" OR "model governance" OR "model review" OR "SR 11-7" '
+    'OR "model validation analyst") -senior -intern -internship'
+)
+QUANTANALYTICS_TERM = (
+    '("quantitative analytics" OR "quantitative associate" OR "quant associate" '
+    'OR "quantitative analytics specialist") -senior -intern -internship'
+)
+
 # Cities for the new clusters: country-wide plus the main bank / hedge-fund hubs.
 NEW_CLUSTER_LOCATIONS: list[tuple[str, str]] = [
     ("United States",  "USA"),
@@ -169,7 +184,7 @@ INTL_CITIES: list[tuple[str, str]] = [
 ALL_CITIES = US_CITIES + INTL_CITIES
 
 # 3 quant clusters × 18 cities + new-grad cluster × 11 US cities + 3 new clusters
-# × 4 locations = 77 queries per JobSpy run. New-grad cluster is US-only to cap runtime — the 2027
+# × 4 locations + 3 second-wave clusters US-wide = 80 queries per JobSpy run. New-grad cluster is US-only to cap runtime — the 2027
 # bank/consulting programs it targets are US postings.
 # Each tuple: (search_term, location, country_indeed)
 JOBSPY_QUERIES: list[tuple[str, str, str]] = [
@@ -183,6 +198,9 @@ JOBSPY_QUERIES: list[tuple[str, str, str]] = [
     (term, loc, country)
     for term in (MODELVAL_TERM, QUANTDEV_TERM, STRATS_TERM)
     for loc, country in NEW_CLUSTER_LOCATIONS
+] + [
+    (term, "United States", "USA")
+    for term in (MODELER_TERM, MODELRISKMGMT_TERM, QUANTANALYTICS_TERM)
 ]
 
 # ── JobSpy scrape parameters ──────────────────────────────────────────────────

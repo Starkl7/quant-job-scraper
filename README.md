@@ -68,6 +68,8 @@ Jobs without a description are scored on title/company and flagged low-confidenc
 
 **Added Nov 2026** (3 clusters × 4 locations: US-wide, New York, Chicago, Charlotte): model validation / model risk, quant developer, and strats / systematic trading analyst. Title gate widened (systematic, trading analyst, derivatives, modeler/modeling, model development); the location-blind title+company dedup was removed so the same role in different cities is kept.
 
+**Second wave (Nov 2026):** quantitative modeler, model risk management and quantitative analytics queries (US-wide); Workday searches (`search_texts`) for Wells Fargo, PNC, Truist, Invesco, S&P Global, M&T, BlackRock and Freddie Mac; Engineers Gate on Greenhouse; and **wallstreetcareers.com** (`scrapers/wsc.py`, keyword search, runs inside the ATS workflow; descriptions come from each page's JobPosting JSON-LD for net-new jobs only; robots.txt allows `/jobs`, crawl delay 1s).
+
 Cities covered: 18 US metro areas across 77 JobSpy queries per run (3 role clusters × 18 cities, new-grad × 11 US cities, 3 newer clusters × 4 locations), lookback window of 72 hours.
 
 ## AI Scoring

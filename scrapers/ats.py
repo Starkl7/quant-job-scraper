@@ -307,21 +307,41 @@ def _post_with_backoff(url: str, payload: dict, label: str) -> requests.Response
 
 
 def _fetch_workday(company: str, co: dict) -> list[dict]:
+    """
+    List a Workday CXS board. With no `search_texts` the whole board is listed
+    newest-first with an age early-stop (original behaviour). With
+    `search_texts` (e.g. ["quantitative", "model risk"]) each term is queried
+    separately — results are relevance-ordered, so no early-stop; age is filtered
+    per item — and rows are tagged `_search_driven` (see run_ats._ats_filter).
+    """
+    terms = co.get("search_texts") or [""]
+    seen: set[str] = set()
+    out: list[dict] = []
+    for term in terms:
+        out.extend(_fetch_workday_term(company, co, term, seen))
+        if len(terms) > 1:
+            time.sleep(_SLEEP)
+    return out
+
+
+def _fetch_workday_term(company: str, co: dict, term: str, seen: set) -> list[dict]:
     tenant = co.get("tenant", "")
     wd     = co.get("wd", "")
     site   = co.get("site", "")
     host   = f"{tenant}.{wd}.myworkdayjobs.com"
     api    = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
     base   = f"https://{host}/en-US/{site}"
+    searched = bool(term)
+    max_pages = 5 if searched else _WORKDAY_MAX_PAGE
 
     out: list[dict] = []
     offset = 0
-    while offset < _WORKDAY_PAGE * _WORKDAY_MAX_PAGE:
+    while offset < _WORKDAY_PAGE * max_pages:
         try:
             r = _post_with_backoff(
                 api,
                 {"limit": _WORKDAY_PAGE, "offset": offset,
-                 "searchText": "", "appliedFacets": {}},
+                 "searchText": term, "appliedFacets": {}},
                 f"{company} workday/{tenant}",
             )
             r.raise_for_status()
@@ -338,23 +358,31 @@ def _fetch_workday(company: str, co: dict) -> list[dict]:
             title = j.get("title", "")
             if _is_noise(title):
                 continue
+            path = j.get("externalPath", "")
+            if path in seen:
+                continue
             age = _workday_posted_age(j.get("postedOn", ""))
             if age is not None and age > _RECENT_DAYS:
-                stop = True          # newest-first ordering → the rest are older too
-                break
+                if not searched:
+                    stop = True      # newest-first ordering → the rest are older too
+                    break
+                continue             # relevance-ordered: just skip this one
+            seen.add(path)
             date_posted = (
                 (date.today() - timedelta(days=age)).isoformat()
                 if age is not None else None
             )
-            path = j.get("externalPath", "")
-            out.append(_job(
+            row = _job(
                 title=title,
                 company=company,
                 location=j.get("locationsText", ""),
                 url=f"{base}{path}" if path else base,
-                description=None,     # not in list API; scoring backfills it
+                description=None,     # not in list API
                 date_posted=date_posted,
-            ))
+            )
+            if searched:
+                row["_search_driven"] = True
+            out.append(row)
 
         if stop or len(postings) < _WORKDAY_PAGE:
             break

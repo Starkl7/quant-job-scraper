@@ -34,6 +34,7 @@ COMPANIES: list[dict] = [
     {"name": "Five Rings Capital",      "ats": "greenhouse", "slug": "fiveringsllc"},
     {"name": "Gelber Group",            "ats": "greenhouse", "slug": "gelbergroup"},
     {"name": "Geneva Trading",          "ats": "greenhouse", "slug": "genevatrading"},
+    {"name": "Engineers Gate",          "ats": "greenhouse", "slug": "engineersgate"},
     {"name": "Headlands Technologies",  "ats": "greenhouse", "slug": "headlandstechnologiesllc"},
     {"name": "Radix Trading",           "ats": "greenhouse", "slug": "radixexperienced"},
     {"name": "Radix Trading",           "ats": "greenhouse", "slug": "radixuniversity"},
@@ -131,6 +132,15 @@ COMPANIES: list[dict] = [
     {"name": "MUFG",             "ats": "workday", "tenant": "mufgub",         "wd": "wd3", "site": "MUFG-Careers"},
     {"name": "BBVA",             "ats": "workday", "tenant": "bbva",           "wd": "wd3", "site": "BBVA"},
     {"name": "DBS",              "ats": "workday", "tenant": "dbs",            "wd": "wd3", "site": "DBS_Careers"},
+    # Added Nov 2026 — model risk / quant analytics employers (endpoints probed read-only)
+    {"name": "Wells Fargo",      "ats": "workday", "tenant": "wf",            "wd": "wd1", "site": "WellsFargoJobs", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "PNC",              "ats": "workday", "tenant": "pnc",           "wd": "wd5", "site": "External", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "Truist",           "ats": "workday", "tenant": "truist",        "wd": "wd1", "site": "Careers", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "Invesco",          "ats": "workday", "tenant": "invesco",       "wd": "wd1", "site": "IVZ", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "S&P Global",       "ats": "workday", "tenant": "spgi",          "wd": "wd5", "site": "SPGI_Careers", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "M&T Bank",         "ats": "workday", "tenant": "mtb",           "wd": "wd5", "site": "MTB", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "BlackRock",        "ats": "workday", "tenant": "blackrock",     "wd": "wd1", "site": "BlackRock_Professional", "search_texts": ["quantitative", "model risk", "model validation"]},
+    {"name": "Freddie Mac",      "ats": "workday", "tenant": "freddiemac",    "wd": "wd5", "site": "External", "search_texts": ["quantitative", "model risk", "model validation"]},
 
     # ── Oracle Cloud Recruiting ────────────────────────────────────────────────
     # Endpoint: GET {host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions

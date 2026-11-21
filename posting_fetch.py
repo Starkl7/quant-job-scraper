@@ -26,6 +26,7 @@ MAX_CONSECUTIVE_FAILS  = 3
 MIN_CHARS              = 150
 
 _LI_ID_RE = re.compile(r"linkedin\.com/jobs/view/(?:[^/?#]*?-)?(\d{6,})")
+_WSC_RE   = re.compile(r"wallstreetcareers\.com/jobs/\d+-")
 _GUEST    = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{id}"
 _HEADERS  = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -48,6 +49,24 @@ def _extract_text(html_text: str) -> str:
     return text.strip()
 
 
+def _extract_wsc(html_text: str) -> str:
+    import json
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html_text, "html.parser")
+    for sc in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(sc.string or "")
+        except Exception:
+            continue
+        if isinstance(data, dict) and data.get("@type") == "JobPosting" and data.get("description"):
+            node = BeautifulSoup(data["description"], "html.parser")
+            for br in node.find_all("br"):
+                br.replace_with("\n")
+            text = node.get_text("\n")
+            return re.sub(r"\n\s*\n\s*\n+", "\n\n", re.sub(r"[ \t]+", " ", text)).strip()
+    return ""
+
+
 class PostingFetcher:
     def __init__(self):
         self.attempts = 0
@@ -65,13 +84,32 @@ class PostingFetcher:
         return {"attempts": self.attempts, "successes": self.successes,
                 "disabled": self.disabled_reason}
 
+    def _fetch_wsc(self, url: str) -> str:
+        """wallstreetcareers detail page → JSON-LD JobPosting description."""
+        self.attempts += 1
+        time.sleep(1.3)                    # site Crawl-delay: 1
+        try:
+            r = self.session.get(url, timeout=25)
+            if r.status_code != 200:
+                return ""
+            text = _extract_wsc(r.text)
+        except Exception as exc:
+            print(f"      ⚠ wsc posting fetch failed ({str(exc)[:60]})")
+            return ""
+        if len(text) < MIN_CHARS:
+            return ""
+        self.successes += 1
+        return text
+
     def fetch(self, job_url: str) -> str:
         """Return posting text, or '' (unsupported URL, blocked, or not found)."""
         if not self.active:
             return ""
+        if _WSC_RE.search(job_url or ""):
+            return self._fetch_wsc(job_url)
         m = _LI_ID_RE.search(job_url or "")
         if not m:
-            return ""                      # non-LinkedIn URL: nothing to do here
+            return ""                      # unsupported URL: nothing to do here
         if self.attempts >= MAX_FETCHES_PER_RUN:
             self.disabled_reason = f"per-run cap {MAX_FETCHES_PER_RUN} reached"
             return ""
