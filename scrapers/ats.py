@@ -276,6 +276,36 @@ def _workday_posted_age(posted_on: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+_WD_HEADERS = {
+    # Workday throttles datacenter IPs harder when the UA looks like a bot
+    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+_WD_RETRIES = 4
+
+
+def _post_with_backoff(url: str, payload: dict, label: str) -> requests.Response:
+    """POST with exponential backoff on 429/5xx, honouring Retry-After."""
+    delay = 3.0
+    for attempt in range(1, _WD_RETRIES + 1):
+        r = _SESSION.post(url, json=payload, headers=_WD_HEADERS, timeout=_TIMEOUT)
+        if r.status_code != 429 and r.status_code < 500:
+            return r
+        if attempt == _WD_RETRIES:
+            return r
+        try:
+            wait = min(float(r.headers.get("Retry-After", delay)), 60.0)
+        except ValueError:
+            wait = delay
+        print(f"    [ATS] {label}: HTTP {r.status_code}, backing off {wait:.0f}s "
+              f"({attempt}/{_WD_RETRIES - 1})")
+        time.sleep(wait)
+        delay *= 2
+    return r  # pragma: no cover
+
+
 def _fetch_workday(company: str, co: dict) -> list[dict]:
     tenant = co.get("tenant", "")
     wd     = co.get("wd", "")
@@ -288,11 +318,11 @@ def _fetch_workday(company: str, co: dict) -> list[dict]:
     offset = 0
     while offset < _WORKDAY_PAGE * _WORKDAY_MAX_PAGE:
         try:
-            r = _SESSION.post(
+            r = _post_with_backoff(
                 api,
-                json={"limit": _WORKDAY_PAGE, "offset": offset,
-                      "searchText": "", "appliedFacets": {}},
-                timeout=_TIMEOUT,
+                {"limit": _WORKDAY_PAGE, "offset": offset,
+                 "searchText": "", "appliedFacets": {}},
+                f"{company} workday/{tenant}",
             )
             r.raise_for_status()
             postings = r.json().get("jobPostings", [])

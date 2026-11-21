@@ -75,6 +75,38 @@ _PROGRAM_TITLE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+# ── Non-quant function denylist ───────────────────────────────────────────────
+# Applied ONLY to titles that have no quant signal and got in via the new-grad
+# program pattern (e.g. "2027 Associate - Audit"). A quant-titled role is never
+# denied by this list. Nov 2026: ~44% of net-new jobs in a run were these.
+# Kept deliberately narrow — investment banking / consulting / markets programs
+# are NOT listed: those are an explicit goal of the new-grad cluster.
+
+_NONQUANT_NOISE_RE = re.compile(
+    r"\baudit\b|\btax\b|accounting|\baccountant\b|bookkeep|payroll|"
+    r"employee\s+benefits|account\s+rep|account\s+manager|insurance|"
+    r"supply\s+chain|logistics|procurement|"
+    r"mechanical|civil\b|electrical\s+engineer|structural|chemical\s+engineer|"
+    r"nurs(?:e|ing)|pharmac|clinical|\bdental|"
+    r"talent\s+acquisition|recruit(?:er|ing)|human\s+resources|\bhr\b|"
+    r"paralegal|legal\s+assistant|"
+    r"client\s+service|customer\s+(?:service|success|support)|"
+    r"sales\s+(?:associate|representative|rep)|business\s+development\s+rep|"
+    r"commercial\s+lines|claims|underwrit|real\s+estate|\bplanning\s+new\s+grad|"
+    r"marketing|content|graphic|\bretail\b|store\s+|warehouse|"
+    r"\bgbs\b|\bgldp\b|onetech|rotational\s+program\s*[-|]\s*(?:operations|hr)",
+    flags=re.IGNORECASE,
+)
+
+
+def noise_hit(title: str) -> str:
+    """Matched noise term for a no-quant-signal title, else ''."""
+    if _QUANT_TITLE_RE.search(title):
+        return ""
+    m = _NONQUANT_NOISE_RE.search(title)
+    return m.group() if m else ""
+
+
 # ── Company blocklist ─────────────────────────────────────────────────────────
 # Annotation / gig platforms that post quant-sounding titles for labelling work.
 # Recruitment agencies are NOT blocked — they post real finance roles.
@@ -271,6 +303,10 @@ def filter_reason(row: pd.Series) -> tuple[bool, str]:
     if not (_QUANT_TITLE_RE.search(title) or _PROGRAM_TITLE_RE.search(title)):
         return False, "EXCLUDED — no quant or new-grad program signal in title"
 
+    noise = noise_hit(title)
+    if noise:
+        return False, f"EXCLUDED — non-quant function in title: '{noise}'"
+
     company_norm = _norm(company)
     if any(blocked in company_norm for blocked in COMPANY_BLOCKLIST):
         return False, f"EXCLUDED — company blocklist: '{company}'"
@@ -330,11 +366,20 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["_tc_key"])
     after_dedup = len(df)
 
-    # Early-career filter
-    df = df[df.apply(is_early_career, axis=1)].copy()
+    # Early-career filter (+ non-quant denylist). Track what the denylist removed.
+    reasons = df.apply(filter_reason, axis=1)
+    dropped = [
+        f"{r.get('title','')} @ {r.get('company','')}"
+        for (ok, why), (_, r) in zip(reasons, df.iterrows())
+        if not ok and "non-quant function" in why
+    ]
+    keep = [ok for ok, _ in reasons]
+    df = df[keep].copy()
+    df.attrs["dropped_titles"] = dropped
 
     print(
         f"  Filters: {before} raw → {after_dedup} after dedup "
         f"→ {len(df)} after early-career filter"
+        f"  ({len(dropped)} dropped as non-quant)"
     )
     return df

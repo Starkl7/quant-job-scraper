@@ -68,12 +68,15 @@ def scrape_one(q: str, location: str, api_key: str) -> list[dict]:
             "hl":       "en",
             "api_key":  api_key,
         },
-        timeout=30,
+        timeout=75,   # Risk/ModelRisk OR-chains routinely exceed 30s (Nov 2026 logs)
     )
     resp.raise_for_status()
     data = resp.json()
-    if data.get("error"):
-        raise RuntimeError(f"SerpAPI error: {data['error']}")
+    err = str(data.get("error", ""))
+    if err and "hasn't returned any results" in err:
+        return []          # a genuinely empty result set, not a failure
+    if err:
+        raise RuntimeError(f"SerpAPI error: {err}")
     return data.get("jobs_results", [])
 
 

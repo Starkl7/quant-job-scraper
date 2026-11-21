@@ -218,6 +218,7 @@ def _main(runlog: RunLog) -> None:
     filtered_df = apply_filters(raw_df)
     filtered_df = _ats_filter(filtered_df)
     runlog.funnel["after_filters"] = len(filtered_df)
+    runlog.dropped_titles = list(filtered_df.attrs.get("dropped_titles", []))
 
     if filtered_df.empty:
         msg = f"🏢 *ATS* ({ts}) — 0 jobs passed filters."

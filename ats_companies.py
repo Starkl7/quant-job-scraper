@@ -35,7 +35,6 @@ COMPANIES: list[dict] = [
     {"name": "Gelber Group",            "ats": "greenhouse", "slug": "gelbergroup"},
     {"name": "Geneva Trading",          "ats": "greenhouse", "slug": "genevatrading"},
     {"name": "Headlands Technologies",  "ats": "greenhouse", "slug": "headlandstechnologiesllc"},
-    {"name": "Old Mission Capital",     "ats": "greenhouse", "slug": "oldmissioncapital"},
     {"name": "Radix Trading",           "ats": "greenhouse", "slug": "radixexperienced"},
     {"name": "Radix Trading",           "ats": "greenhouse", "slug": "radixuniversity"},
     {"name": "TransMarket Group",       "ats": "greenhouse", "slug": "transmarketgroup"},
@@ -96,7 +95,6 @@ COMPANIES: list[dict] = [
     # Endpoint: https://api.lever.co/v0/postings/{slug}?mode=json
 
     {"name": "Belvedere Trading",  "ats": "lever", "slug": "belvederetrading"},
-    {"name": "HAP Capital",        "ats": "lever", "slug": "hap-capital"},
     {"name": "Valkyrie Trading",   "ats": "lever", "slug": "valkyrietrading"},
 
     # ── Recruitee ─────────────────────────────────────────────────────────────

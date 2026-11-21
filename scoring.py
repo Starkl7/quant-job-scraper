@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from google import genai
 from google.genai import types
 
+from posting_fetch import fetcher as posting_fetcher
 from config import (
     GEMINI_API_KEY, GEMINI_API_KEY_2,
     RESUME_FOLDER_ID, RESUME_LABELS,
@@ -350,11 +351,19 @@ def batch_score(
                 else:
                     print(f"      → not found, will score on title/company only")
     else:
-        for job in jobs:
+        for i, job in enumerate(jobs):
             desc = str(job.get("description", "")).strip()
             if not desc or desc.lower() in ("nan", "none"):
                 job.setdefault("_was_no_desc",   True)
                 job.setdefault("_fetched_chars", 0)
+                # Real posting text (LinkedIn guest endpoint) — net-new jobs only
+                text = posting_fetcher.fetch(str(job.get("job_url", "")))
+                if text:
+                    job["description"]    = text
+                    job["_fetched_chars"] = len(text)
+                    job["_desc_source"]   = "posting"
+                    print(f"    [Job {i+1}] posting text {len(text):,} chars — "
+                          f"{job.get('title','')[:40]} @ {job.get('company','')[:20]}")
 
     # ── Build contents: PDF parts + jobs prompt ────────────────────────────────
     contents: list = []
@@ -534,7 +543,10 @@ def _build_jobs_prompt(jobs: list[dict]) -> str:
         desc = str(job.get("description", "")).strip()
         if desc and desc.lower() not in ("nan", "none"):
             was_fetched  = job.get("_was_no_desc", False)
-            source_note  = " [description generated via Gemma]" if was_fetched else ""
+            if job.get("_desc_source") == "posting":
+                source_note = " [full posting text]"
+            else:
+                source_note = " [description generated via Gemma]" if was_fetched else ""
             desc_section = f"Description{source_note}:\n{_trim_description(desc)}"
             low_conf     = "true" if (was_fetched and not job.get("_fetched_chars")) else "false"
         else:
