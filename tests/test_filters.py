@@ -25,6 +25,34 @@ def test_quant_titles_never_denied_by_noise_list():
     assert filters.noise_hit("Tax Associate, State and Local Tax") == "Tax"
 
 
+def test_weak_signals_dont_admit_noise():
+    for t in ["Associate Tax Derivatives Accountant", "Junior Audit Associate - Derivatives Valuation",
+              "Entry Level Claims Modeling Analyst", "Associate, Employee Benefits Modeling",
+              "Marketing Mix Modeling Analyst", "Clinical Pharmacology Modeling Associate",
+              "Insurance Catastrophe Modeler - Associate", "Retail Systematic Merchandising Associate",
+              "Systematic Review Analyst, Clinical", "3D Modeler Entry Level", "Hydrologic Modeler I",
+              "Supply Chain Modeling Analyst", "Energy Trading Analyst", "Sales Trading Analyst",
+              "Jr. Modeling & Simulation Engineer", "Power Market Analyst, Market Modeling & Strategy",
+              "Research Scientist - World Modeling", "Portfolio Trading Analyst - Wealth Management"]:
+        assert not filters.is_early_career(_row(t)), t
+
+
+def test_weak_signals_admit_real_roles():
+    for t in ["Associate, Model Development", "Associate, Initial Margining Modeling",
+              "Residential Mortgage Modeler", "USD Rates Trading Analyst",
+              "Systematic Derivatives - Associate", "Credit Risk Modeler"]:
+        assert filters.is_early_career(_row(t)), t
+
+
+def test_location_format_variants_collapse():
+    df = pd.DataFrame([
+        _row("Quantitative Researcher", "Acme", "New York, NY"),
+        _row("Quantitative Researcher", "Acme", "New York, NY, USA"),
+        _row("Quantitative Researcher", "Acme", "New York, New York, United States"),
+    ])
+    assert len(filters.apply_filters(df)) == 1
+
+
 def test_cities_stay_distinct_in_run():
     df = pd.DataFrame([
         _row("Quantitative Model Validation Analyst", "U.S. Bank", "Minneapolis, MN"),

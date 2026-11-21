@@ -55,16 +55,30 @@ _GRAD_RE = re.compile(
 # Title must contain at least one of these to pass; catches unrelated roles
 # that slipped in because "quantitative" appeared in the description.
 
-_QUANT_TITLE_RE = re.compile(
+# STRONG signals: unambiguous quant-finance vocabulary.
+_STRONG_TITLE_RE = re.compile(
     r'\bquant\b|quantitative|\balgo\b|algorithmic|\btrader\b|researcher'
-    r'|strategist|risk\s+analyst|model\s+(?:risk|validat)'
-    # Added Nov 2026 after a live sample showed real roles rejected by the gate
-    # (e.g. "Systematic Derivatives - Associate", "Junior Trading Analyst",
-    # "Systematic Credit Strategies Research"). Gemini scoring does the relevance call.
-    r'|systematic|trading\s+analyst|derivatives?\b|model(?:l?er|l?ing)\b'
-    r'|model\s+develop|strategies\s+research',
+    r'|strategist|risk\s+analyst|model\s+(?:risk|validat)',
     flags=re.IGNORECASE,
 )
+
+# WEAK signals (added Nov 2026 after a live sample showed real roles rejected, e.g.
+# "Systematic Derivatives - Associate", "Junior Trading Analyst", "Associate, Model
+# Development"). Each needs a finance qualifier, and a weak-only title is ALSO run
+# through the denylist + energy/sales/etc. extras (see noise_hit) because words like
+# "modeling" / "systematic" / "derivatives" appear in plenty of non-finance titles.
+_WEAK_TITLE_RE = re.compile(
+    r'systematic\s+(?:trading|credit|equit|macro|derivativ|strateg|research|invest)'
+    r'|trading\s+analyst'
+    r'|derivatives?\s+(?:trad|struct|quant|analyst|pricing|research)'
+    r'|(?:credit|risk|market|financial|loss|prepayment|margin|mortgage|pricing)\w*\s+model(?:l?er|l?ing)\b'
+    r'|model\s+develop'
+    r'|strategies\s+research',
+    flags=re.IGNORECASE,
+)
+
+_QUANT_TITLE_RE = re.compile(_STRONG_TITLE_RE.pattern + "|" + _WEAK_TITLE_RE.pattern,
+                             flags=re.IGNORECASE)
 
 # New-grad program titles that carry no quant keyword — bank/consulting 2027
 # programs like "2027 Markets Full-Time Analyst Program" or "Strategy
@@ -104,12 +118,25 @@ _NONQUANT_NOISE_RE = re.compile(
 )
 
 
+# Extra deny terms applied only to weak-signal-only titles (e.g. "Energy Trading Analyst").
+_WEAK_EXTRA_NOISE_RE = re.compile(
+    r"energy|power|commodit|natural\s+gas|\boil\b|hydro|clinical|pharma|claims|"
+    r"catastroph|wealth|sales|marketing|simulation|3d|world\s+model|merchandis",
+    flags=re.IGNORECASE,
+)
+
+
 def noise_hit(title: str) -> str:
-    """Matched noise term for a no-quant-signal title, else ''."""
-    if _QUANT_TITLE_RE.search(title):
+    """Matched noise term for a title without a STRONG quant signal, else ''."""
+    if _STRONG_TITLE_RE.search(title):
         return ""
     m = _NONQUANT_NOISE_RE.search(title)
-    return m.group() if m else ""
+    if m:
+        return m.group()
+    if _WEAK_TITLE_RE.search(title):
+        m = _WEAK_EXTRA_NOISE_RE.search(title)
+        return m.group() if m else ""
+    return ""
 
 
 # ── Company blocklist ─────────────────────────────────────────────────────────
@@ -342,7 +369,7 @@ def is_early_career(row: pd.Series) -> bool:
 def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     """
     Apply all filters to a raw DataFrame. Returns filtered copy with
-    _dedup_key and _tc_key columns added.
+    a _dedup_key column added.
     """
     if df.empty:
         return df

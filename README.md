@@ -1,6 +1,6 @@
 # Job Scraper 
 
-Automated pipeline that scrapes quantitative finance and finance-tech job listings from LinkedIn, Indeed, and Google Jobs, scores them with Gemini AI against your resume, and pushes results to a Notion database — runs daily on GitHub Actions.
+Automated pipeline that scrapes quantitative finance and finance-tech job listings from LinkedIn, Google Jobs and direct ATS endpoints (Indeed was dropped), scores them with Gemini AI against your resume, and pushes results to a Notion database — runs daily on GitHub Actions.
 
 ## Overview
 
@@ -68,7 +68,7 @@ Jobs without a description are scored on title/company and flagged low-confidenc
 
 **Added Nov 2026** (3 clusters × 4 locations: US-wide, New York, Chicago, Charlotte): model validation / model risk, quant developer, and strats / systematic trading analyst. Title gate widened (systematic, trading analyst, derivatives, modeler/modeling, model development); the location-blind title+company dedup was removed so the same role in different cities is kept.
 
-Cities covered: 18 US metro areas across 54 JobSpy queries per run (3 role clusters × 18 cities), lookback window of 72 hours.
+Cities covered: 18 US metro areas across 77 JobSpy queries per run (3 role clusters × 18 cities, new-grad × 11 US cities, 3 newer clusters × 4 locations), lookback window of 72 hours.
 
 ## AI Scoring
 
