@@ -1,0 +1,56 @@
+name: Scrape WallStreetCareers
+
+on:
+  schedule:
+    - cron: '30 17 * * *'  # after the site's daily ~16:00 UTC employer-feed sync (GitHub may start it late)
+    - cron: '0 1 * * *'    # overnight pass for stragglers
+  workflow_dispatch:          # manual trigger from GitHub UI
+
+concurrency:
+  group: scrape-wsc
+  cancel-in-progress: false
+
+jobs:
+  scrape-wsc:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write         # push run-health log to the run-logs branch
+    timeout-minutes: 60       # ~2 min scrape + scoring of ~20-40 net-new jobs
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run WallStreetCareers scraper + score + push to Notion
+        env:
+          PYTHONUNBUFFERED: "1"
+          NOTION_TOKEN:           ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID:           ${{ secrets.NOTION_DB_ID }}
+          GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
+          FETCH_DESCRIPTION_KEY:  ${{ secrets.FETCH_DESCRIPTION_KEY }}
+          RESUME_FOLDER_ID:       ${{ secrets.RESUME_FOLDER_ID }}
+          SLACK_WEBHOOK_URL:      ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python run_wsc.py
+
+      - name: Upload run-health log (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-health-wsc-${{ github.run_id }}
+          path: logs/run_health.jsonl
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Push run-health log to run-logs branch
+        if: always()
+        continue-on-error: true
+        run: bash scripts/push_run_log.sh

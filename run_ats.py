@@ -35,7 +35,6 @@ from scoring import (
     fetch_description, score_single, validate_models,
 )
 from scrapers.ats import fetch_all
-from scrapers.wsc import scrape_wsc
 
 # ── ATS-specific title filter ─────────────────────────────────────────────────
 # Applied AFTER apply_filters() so it doesn't affect the JobSpy/SerpAPI pipelines.
@@ -223,21 +222,6 @@ def _main(runlog: RunLog) -> None:
     print(f"     {len(raw_df)} raw listings fetched")
     filtered_df = apply_filters(raw_df)
     filtered_df = _ats_filter(filtered_df)
-    # wallstreetcareers.com: keyword-search driven (like LinkedIn), so it gets the
-    # normal quant filters but NOT the ATS "needs an explicit early-career label" rule.
-    try:
-        with runlog.phase("wsc"):
-            wsc_raw = scrape_wsc(runlog=runlog)
-        runlog.funnel["wsc_raw"] = len(wsc_raw)
-        if not wsc_raw.empty:
-            wsc_f = apply_filters(wsc_raw)
-            bad = wsc_f["title"].apply(lambda t: bool(_ATS_EXPERIENCED_RE.search(str(t)))
-                                       or bool(_ATS_INTERN_RE.search(str(t))))
-            wsc_f = wsc_f[~bad]
-            runlog.funnel["wsc_after_filters"] = len(wsc_f)
-            filtered_df = pd.concat([filtered_df, wsc_f], ignore_index=True)
-    except Exception as exc:                      # never let an extra source break the ATS run
-        runlog.note(f"wallstreetcareers scrape failed: {type(exc).__name__}: {exc}")
     runlog.funnel["after_filters"] = len(filtered_df)
     runlog.dropped_titles = list(filtered_df.attrs.get("dropped_titles", []))
 
