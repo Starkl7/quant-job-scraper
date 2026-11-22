@@ -221,6 +221,7 @@ COMPANY_ALIASES: dict[str, str] = {
     "clearwater analytics (cwan)": "clearwater analytics",
     "innova solutions": "innova",
     "td securities": "td",
+    "aqr capital management": "aqr capital",
 }
 
 

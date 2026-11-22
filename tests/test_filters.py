@@ -92,3 +92,9 @@ def test_wells_fargo_blocked_by_company():
     for c in ["Wells Fargo", "Wells Fargo & Company", "WELLS FARGO Securities"]:
         assert not filters.is_early_career(_row("Quantitative Analyst - Entry Level", company=c)), c
     assert filters.is_early_career(_row("Quantitative Analyst - Entry Level", company="Wellington Management"))
+
+
+def test_aqr_alias_dedups_brand_and_legal_name():
+    a = filters.make_dedup_key("Quantitative Researcher", "AQR Capital", "Greenwich, CT")
+    b = filters.make_dedup_key("Quantitative Researcher", "AQR Capital Management, LLC", "Greenwich, CT")
+    assert a == b
