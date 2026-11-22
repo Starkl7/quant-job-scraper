@@ -31,7 +31,7 @@ _SENIOR_RE = re.compile(
 
 INTERN_PATTERNS: list[str] = [
     r"\bintern\b", r"\binterns\b", "internship", r"\bco-?op\b",
-    "summer analyst", "summer associate",
+    r"\bsummer\b",   # any "Summer" in the TITLE is an internship giveaway (never test the JD)
     r"\bstage\b",   # French-style internship ("Quant Developer Stage")
 ]
 _INTERN_RE = re.compile(
@@ -148,6 +148,8 @@ def noise_hit(title: str) -> str:
 # Recruitment agencies are NOT blocked — they post real finance roles.
 # Prop trading firms that require the trader to fund/risk their own capital
 # (not W-2 employment) are also blocked — e.g. T3 Trading.
+# Firms with a known blanket no-visa-sponsorship policy are blocked too
+# (substring match on the normalised company name, so subsidiaries are covered).
 
 COMPANY_BLOCKLIST: frozenset[str] = frozenset({
     "dataannotation",
@@ -159,6 +161,7 @@ COMPANY_BLOCKLIST: frozenset[str] = frozenset({
     "lionbridge",
     "t3 trading",
     "mysmartpros",
+    "wells fargo",   # blanket no-sponsorship policy
 })
 
 # ── Experience extraction ─────────────────────────────────────────────────────

@@ -76,3 +76,19 @@ if __name__ == "__main__":
         if n.startswith("test_"):
             f()
     print("ok")
+
+
+def test_summer_in_title_is_excluded_but_not_in_jd_or_company():
+    for t in ["Summer 2027 Quantitative Researcher", "Quantitative Trading Summer Program",
+              "Summer Quant Trader", "Quant Strategist - Summer Analyst"]:
+        assert not filters.is_early_career(_row(t, desc="new grad")), t
+    # "Summer" only in the JD or company name must not exclude a genuine role
+    assert filters.is_early_career(_row("Junior Quantitative Analyst",
+                                        company="Summer Street Capital",
+                                        desc="Not a summer role; full-time start 2027"))
+
+
+def test_wells_fargo_blocked_by_company():
+    for c in ["Wells Fargo", "Wells Fargo & Company", "WELLS FARGO Securities"]:
+        assert not filters.is_early_career(_row("Quantitative Analyst - Entry Level", company=c)), c
+    assert filters.is_early_career(_row("Quantitative Analyst - Entry Level", company="Wellington Management"))

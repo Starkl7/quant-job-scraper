@@ -133,7 +133,6 @@ COMPANIES: list[dict] = [
     {"name": "BBVA",             "ats": "workday", "tenant": "bbva",           "wd": "wd3", "site": "BBVA"},
     {"name": "DBS",              "ats": "workday", "tenant": "dbs",            "wd": "wd3", "site": "DBS_Careers"},
     # Added Nov 2026 — model risk / quant analytics employers (endpoints probed read-only)
-    {"name": "Wells Fargo",      "ats": "workday", "tenant": "wf",            "wd": "wd1", "site": "WellsFargoJobs", "search_texts": ["quantitative", "model risk", "model validation"]},
     {"name": "PNC",              "ats": "workday", "tenant": "pnc",           "wd": "wd5", "site": "External", "search_texts": ["quantitative", "model risk", "model validation"]},
     {"name": "Truist",           "ats": "workday", "tenant": "truist",        "wd": "wd1", "site": "Careers", "search_texts": ["quantitative", "model risk", "model validation"]},
     {"name": "Invesco",          "ats": "workday", "tenant": "invesco",       "wd": "wd1", "site": "IVZ", "search_texts": ["quantitative", "model risk", "model validation"]},
